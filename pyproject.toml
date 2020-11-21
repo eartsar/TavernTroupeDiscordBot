@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "troupetweets"
+version = "0.1.0"
+description = ""
+authors = ["Eitan Romanoff <eitan.romanoff@trinetx.com>"]
+
+[tool.poetry.dependencies]
+python = "3.7"
+python-twitter = "^3.5"
+requests = "^2.25.0"
+"discord.py" = "^1.5.1"
+aiosqlite = "^0.16.0"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
