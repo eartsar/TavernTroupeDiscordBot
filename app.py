@@ -1,3 +1,4 @@
+import argparse
 import requests
 import yaml
 import sys
@@ -48,7 +49,7 @@ class TroupeTweetBot(discord.Client):
     async def heartbeat(self):
         # Get all the tweets from dragonrealms
         header = {}
-        header['authorization'] = f'Bearer {BEARER}'
+        header['authorization'] = f'Bearer {BEARER_TOKEN}'
 
         while True:
             for account in RELAY_MAP.keys():
