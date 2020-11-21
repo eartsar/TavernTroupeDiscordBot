@@ -1,0 +1,15 @@
+# Copy this template to a separate file, and do NOT commit it to your repository!
+
+# Your discord bot token
+# You can find documentation on how to set up a Discord app and Bot account from the link below.
+# https://discordpy.readthedocs.io/en/latest/discord.html
+bot_token: <BOT_TOKEN>
+
+# Your twitter API bearer token
+# This only uses tweet querying endpoints on twitter's v2 API. Documentation linked below.
+# https://developer.twitter.com/en/docs/authentication/oauth-2-0/bearer-tokens 
+twitter_bearer_token: <TWITTER_BEARER_TOKEN>
+
+# This bot uses sqlite3 to cache seen tweet ids to avoid repeating itself.
+# The directory structure must exist. If the file does not exist, the bot will create it.
+sqlite3_database_path: /path/to/db
