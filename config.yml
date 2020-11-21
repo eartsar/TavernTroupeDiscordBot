@@ -10,6 +10,26 @@ bot_token: <BOT_TOKEN>
 # https://developer.twitter.com/en/docs/authentication/oauth-2-0/bearer-tokens 
 twitter_bearer_token: <TWITTER_BEARER_TOKEN>
 
+# This is the twitter account to channel relay mapping where you can configure which twitter
+# accounts will have tweets relayed to which channels. This is a one-to-many mapping so
+# you can relay the same tweet to multiple locations. The twitter name does not have the @ sign.
+#
+# You can get the channel ID by setting up the "developer mode" flag in Discord, right-clicking
+# the channel in question, and clicking "copy ID".
+# 
+# Here is an example configuration
+#
+# twitter_relay_map:
+#   DragonRealms:
+#     - 998877665544332211
+#     - 112233445566778899
+#   taylorswift13:
+#     - 192837465564738291
+#
+twitter_relay_map:
+  DragonRealms:
+    - 000000000000000000
+
 # This bot uses sqlite3 to cache seen tweet ids to avoid repeating itself.
 # The directory structure must exist. If the file does not exist, the bot will create it.
 sqlite3_database_path: /path/to/db

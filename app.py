@@ -3,10 +3,20 @@ import argparse
 import yaml
 import discord
 import asyncio
+import logging
 
 from persist import DatabaseManager
 from tweets import TweetManager
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("bot.log"),
+        logging.StreamHandler()
+    ],
+    encoding='utf-8'
+)
 
 # Parse the command line arguments
 parser = argparse.ArgumentParser(description='Run the TroupeTweets bot.')
@@ -20,6 +30,7 @@ with open(args.config, 'r') as f:
     config = yaml.safe_load(f)
 
 TWITTER_BEARER_TOKEN = config['twitter_bearer_token']
+TWITTER_RELAY_MAP = config['twitter_relay_map']
 BOT_TOKEN = config['bot_token']
 DB_FILE_PATH = config['sqlite3_database_path']
 
@@ -28,12 +39,12 @@ DB_FILE_PATH = config['sqlite3_database_path']
 class TroupeTweetBot(discord.Client):
     def __init__(self):
         self.db = DatabaseManager(DB_FILE_PATH)
-        self.tweets = TweetManager(self.db, TWITTER_BEARER_TOKEN)
+        self.tweets = TweetManager(self, self.db, TWITTER_BEARER_TOKEN, TWITTER_RELAY_MAP)
         super().__init__()
 
 
     async def on_ready(self):
-        print("TroupeBot initializing...")
+        logging.info("TroupeBot initializing...")
         await self.db.initialize()
         await self.tweets.initialize()
 

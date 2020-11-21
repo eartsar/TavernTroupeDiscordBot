@@ -1,4 +1,5 @@
 import aiosqlite
+import logging
 
 
 class DatabaseManager():
@@ -10,10 +11,10 @@ class DatabaseManager():
 
     async def initialize(self):
         async with aiosqlite.connect(self.dbpath) as db:
-            print("Connecting to and preparing SQLITE database...")
+            logging.info("Connecting to and preparing SQLITE database...")
             await db.execute('CREATE TABLE IF NOT EXISTS CACHED_TWEETS (tweet_id varchar(255), channel_id varchar(255), UNIQUE(tweet_id, channel_id))')
             await db.execute('CREATE TABLE IF NOT EXISTS CHANNELS (channel_id varchar(255), UNIQUE(channel_id))')
-            print("Done.")
+            logging.info("Done.")
 
 
     async def watch_channel(self, tweet_id, channel_id):
