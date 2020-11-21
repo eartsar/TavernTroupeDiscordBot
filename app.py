@@ -14,8 +14,7 @@ logging.basicConfig(
     handlers=[
         logging.FileHandler("bot.log"),
         logging.StreamHandler()
-    ],
-    encoding='utf-8'
+    ]
 )
 
 # Parse the command line arguments
