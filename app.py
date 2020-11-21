@@ -58,7 +58,7 @@ class TroupeTweetBot(discord.Client):
             return
 
         if message.content == '!ping':
-            message.channel.send(f'{message.author.mention} pong!')
+            await message.channel.send(f'{message.author.mention} pong!')
 
 
 def main():
