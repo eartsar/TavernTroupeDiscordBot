@@ -5,7 +5,7 @@ description = ""
 authors = ["Eitan Romanoff <eitan.romanoff@trinetx.com>"]
 
 [tool.poetry.dependencies]
-python = "3.7"
+python = "3.6"
 python-twitter = "^3.5"
 requests = "^2.25.0"
 "discord.py" = "^1.5.1"
