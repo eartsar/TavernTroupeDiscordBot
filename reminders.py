@@ -4,12 +4,16 @@ import asyncio
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from datetime import datetime, timedelta, timezone
+from dateutil import tz
 from calendar import monthrange
 from requests.structures import CaseInsensitiveDict
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 # Poll interval in seconds
 CALENDAR_POLL_INTERVAL = 30
+
+EASTERN_TIMEZONE = tz.gettz('America/New_York')
+UTC_TIMEZONE = tz.tzutc()
 
 class ReminderManager():
     def __init__(self, bot, google_creds, relay_map):
@@ -187,8 +191,8 @@ class ReminderManager():
         msg = "📅  🐱 💬  Here are the upcoming events on that calendar for this month and next month.\n```"
         for future_event in future_events:
             start = future_event['start']
-            when = datetime.fromisoformat(future_event['start']['dateTime'])
-            when_str = when.strftime("%A, %d. %B %Y %I:%M%p Eastern Time").replace('12:00AM Eastern Time', '')
+            when = datetime.fromisoformat(future_event['start']['dateTime']).astimezone(EASTERN_TIMEZONE)
+            when_str = when.strftime("%A, %d. %B %Y %I:%M%p %Z").replace('12:00AM EST', '')
             msg += f'{future_event["summary"]} - {when_str}\n'
         msg += '```'
         await channel.send(msg)
