@@ -29,6 +29,8 @@ class ReminderManager():
             channel_ids = config['channels']
             # This is a list of integers representing how many minutes prior to the event do we want a reminder
             when_to_notify = config['when']
+            ping = config['ping']
+
             channels = []
             for channel_id in channel_ids:
                 channel = discord.utils.get(self.bot.get_all_channels(), id=int(channel_id))
@@ -37,7 +39,7 @@ class ReminderManager():
                 else:
                     channels.append(channel)
             logging.info(f"  Watching for events from Google Calendar {calendar_label} with id {calendar_id}...")
-            self.tasks.append(asyncio.create_task(self.poll_calendar_events(calendar_id, channels, when_to_notify)))
+            self.tasks.append(asyncio.create_task(self.poll_calendar_events(calendar_id, channels, when_to_notify, ping)))
         logging.info("Done.")
 
 
@@ -47,7 +49,7 @@ class ReminderManager():
         return build('calendar', 'v3', credentials=credentials, cache_discovery=False)
 
 
-    async def poll_calendar_events(self, calendar_id, channels, when_to_notify):
+    async def poll_calendar_events(self, calendar_id, channels, when_to_notify, ping):
         # This cache is local to only this running coroutine
         # We only want to notify an event for a particular "minutes until event" trigger one time
         cache = {}
@@ -71,9 +73,11 @@ class ReminderManager():
                 start_after = right_now + timedelta(minutes=look_ahead)
                 start_before = start_after + timedelta(minutes=1)
                 for channel in channels:
+                    newline = "\n"
                     await self.get_events_in_window(
                         calendar_id, start_after, start_before, channel, look_ahead, cache[look_ahead],
-                        f'📅  🐱 💬  Events are starting {"in " + str(look_ahead) + " minutes" if look_ahead > 0 else "now"}!'
+                        f'📅  🐱 💬  {"@here " if ping else ""}' +
+                            f'Events are starting {"in " + str(look_ahead) + " minutes" if look_ahead > 0 else "now"}!'
                     )
             await asyncio.sleep(CALENDAR_POLL_INTERVAL)
 

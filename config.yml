@@ -65,11 +65,13 @@ google_credentials: /path/to/creds.json
 # under "Integrate Calendar". It should be the first field.
 #
 # Here is an example configuration. Calendar names are arbitrary.
-# "When" is how long before the event to send the reminder, with 0 being at event time.
+# "when" is how long before the event to send the reminder, with 0 being at event time.
+# "ping" will have the reminder do a @here in the channel if set to True.
 #
 # reminder_relay_map:
 #   TavernTroupe:
 #     calendar_id: someurl@group.calendar.google.com
+#     ping: False
 #     channels:
 #       - 112233445566778899
 #       - 998877665544332211
@@ -84,6 +86,7 @@ google_credentials: /path/to/creds.json
 reminder_relay_map:
   ReminderName:
     calendar_id: someurl@group.calendar.google.com
+    ping: False
     channels:
       - <CHANNEL_ID>
     when:
