@@ -188,7 +188,7 @@ class ReminderManager():
         await self._change_events_start_date_to_datetime(future_events)
         future_events = sorted(future_events, key=lambda item: datetime.fromisoformat(item['start']['dateTime']))
 
-        msg = "📅  🐱 💬  Here are the upcoming events on that calendar for this month and next month.\n```"
+        msg = "📅  🐱 💬  There are some meetsing and events coming up...\n```"
         for future_event in future_events:
             start = future_event['start']
             when = datetime.fromisoformat(future_event['start']['dateTime']).astimezone(EASTERN_TIMEZONE)
