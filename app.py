@@ -68,6 +68,14 @@ class TroupeTweetBot(discord.Client):
             tokens = message.content.split(' ')
             name = tokens[1] if len(tokens) > 1 else None
             await self.reminders.get_upcoming_events(message.channel, calendar_name=name)
+        elif message.content.startswith('!help'):
+            await message.channel.send('''😽  Here's what I know how to do (so far)!
+```\
+!ping                           Test command to ensure the bot is healthy.
+!events <calendar_name>         Pull up the events for the named calendar for this month and next month
+                                Keep calendar_name blank to get a list of calendars the bot knows of.
+!help\
+```''')
 
 
 def main():

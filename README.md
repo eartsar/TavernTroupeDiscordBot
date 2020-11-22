@@ -11,7 +11,10 @@ It's a discord bot that I hacked together extremely quickly to fit the needs of 
 
 ## Commands
     !ping                           Test command to ensure the bot is healthy.
+    !events <calendar_name>         Pull up the events for the named calendar for this month and next month
+                                    Keep calendar_name blank to get a list of calendars the bot knows of.
+    !help
 
 ## TODOs
-* Calendar integration with events reminder
+???
 
