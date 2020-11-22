@@ -29,12 +29,16 @@ config = {}
 with open(args.config, 'r') as f:
     config = yaml.safe_load(f)
 
-TWITTER_BEARER_TOKEN = config['twitter_bearer_token']
-TWITTER_RELAY_MAP = config['twitter_relay_map']
 BOT_TOKEN = config['bot_token']
 DB_FILE_PATH = config['sqlite3_database_path']
-GOOGLE_CAL_CREDS = config['google_credentials']
-REMINDER_RELAY_MAP = config['reminder_relay_map']
+CALENDAR_ENABLED = config['enable_calendar']
+TWITTER_ENABLED = config['enable_twitter']
+
+TWITTER_BEARER_TOKEN = config['twitter_bearer_token'] if TWITTER_ENABLED else None
+TWITTER_RELAY_MAP = config['twitter_relay_map'] if TWITTER_ENABLED else None
+
+GOOGLE_CAL_CREDS = config['google_credentials'] if CALENDAR_ENABLED else None
+REMINDER_RELAY_MAP = config['reminder_relay_map'] if CALENDAR_ENABLED else None
 
 
 
@@ -49,8 +53,10 @@ class TroupeTweetBot(discord.Client):
     async def on_ready(self):
         logging.info("TroupeBot initializing...")
         await self.db.initialize()
-        await self.tweets.initialize()
-        await self.reminders.initialize()
+        if TWITTER_ENABLED:
+            await self.tweets.initialize()
+        if CALENDAR_ENABLED:
+            await self.reminders.initialize()
 
 
     async def on_message(self, message):
@@ -64,7 +70,7 @@ class TroupeTweetBot(discord.Client):
 
         if message.content == '!ping':
             await message.channel.send(f'{message.author.mention} pong!')
-        elif message.content.startswith('!events'):
+        elif CALENDAR_ENABLED and message.content.startswith('!events'):
             tokens = message.content.split(' ')
             name = tokens[1] if len(tokens) > 1 else None
             await self.reminders.get_upcoming_events(message.channel, calendar_name=name)

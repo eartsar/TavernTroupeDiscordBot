@@ -1,9 +1,26 @@
 # Copy this template to a separate file, and do NOT commit it to your repository!
 
+# ======================
+#     GENERAL CONFIG
+# ======================
+
 # Your discord bot token
 # You can find documentation on how to set up a Discord app and Bot account from the link below.
 # https://discordpy.readthedocs.io/en/latest/discord.html
 bot_token: <BOT_TOKEN>
+
+# This bot uses sqlite3 for various parts of its functionality.
+# The directory structure must exist. If the file does not exist, the bot will create it.
+sqlite3_database_path: /path/to/db
+
+
+
+# ======================
+#     TWITTER CONFIG
+# ======================
+
+# Enables twitter functionality. If false, twitter configuration is not required.
+enable_twitter: True
 
 # Your twitter API bearer token
 # This only uses tweet querying endpoints on twitter's v2 API. Documentation linked below.
@@ -30,9 +47,11 @@ twitter_relay_map:
   DragonRealms:
     - <CHANNEL_ID>
 
-# This bot uses sqlite3 to cache seen tweet ids to avoid repeating itself.
-# The directory structure must exist. If the file does not exist, the bot will create it.
-sqlite3_database_path: /path/to/db
+
+# =======================
+#     CALENDAR CONFIG
+# =======================
+enable_calendar: True
 
 # Path to the Google service account that will have access to the events calendar
 # Learn more on how to create a service account from the link below.
@@ -57,6 +76,8 @@ google_credentials: /path/to/creds.json
 #     when:
 #       - 0
 #       - 60
+#     ping:
+#       - @here
 #   SomeOtherCalendar:
 #     ...
 #
