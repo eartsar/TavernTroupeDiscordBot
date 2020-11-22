@@ -28,8 +28,42 @@ twitter_bearer_token: <TWITTER_BEARER_TOKEN>
 #
 twitter_relay_map:
   DragonRealms:
-    - 000000000000000000
+    - <CHANNEL_ID>
 
 # This bot uses sqlite3 to cache seen tweet ids to avoid repeating itself.
 # The directory structure must exist. If the file does not exist, the bot will create it.
 sqlite3_database_path: /path/to/db
+
+# Path to the Google service account that will have access to the events calendar
+# Learn more on how to create a service account from the link below.
+# https://cloud.google.com/iam/docs/service-accounts
+google_credentials: /path/to/creds.json
+
+
+# Google Sheets notification map. Works like the twitter map above, more or less.
+# 
+# The google calendar ID can be found by going to the calendar settings, then 
+# under "Integrate Calendar". It should be the first field.
+#
+# Here is an example configuration. Calendar names are arbitrary.
+# "When" is how long before the event to send the reminder, with 0 being at event time.
+#
+# reminder_relay_map:
+#   TavernTroupe:
+#     calendar_id: someurl@group.calendar.google.com
+#     channels:
+#       - 112233445566778899
+#       - 998877665544332211
+#     when:
+#       - 0
+#       - 60
+#   SomeOtherCalendar:
+#     ...
+#
+reminder_relay_map:
+  ReminderName:
+    calendar_id: someurl@group.calendar.google.com
+    channels:
+      - <CHANNEL_ID>
+    when:
+      - <MINUTES>

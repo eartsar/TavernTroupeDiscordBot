@@ -27,6 +27,11 @@ class TweetManager():
             self.tasks.append(asyncio.create_task(self.poll_tweets(account)))
         logging.info("Done.")
 
+        for destination_channel_id in self.relay_map[account]:
+            channel = discord.utils.get(self.bot.get_all_channels(), id=int(destination_channel_id))
+            if not channel:
+                logging.warning(f"Bot does not have access to channel with ID {destination_channel_id}!")
+
 
     async def poll_tweets_for_channel(self, account, destination_channel_id):
         try:
@@ -34,8 +39,11 @@ class TweetManager():
             tweet_cache_key = f'{account}|{destination_channel_id}'
 
             params = {'query': f'from:{account}'}
-            if tweet_cache_key in self.last_seen_tweet_cache:
+
+            waking_up = tweet_cache_key not in self.last_seen_tweet_cache
+            if not waking_up:
                 params['since_id'] = self.last_seen_tweet_cache[tweet_cache_key]
+
 
             r = requests.get(TWITTER_API_RECENT_ENDPOINT, params=params, headers=header)
             content = r.content.decode('utf-8')
@@ -50,15 +58,21 @@ class TweetManager():
             if len(tweets) > TWEET_LOOKBACK:
                 tweets = tweets[:TWEET_LOOKBACK]
 
+            # Grab the channel
+            channel = discord.utils.get(self.bot.get_all_channels(), id=int(destination_channel_id))
+            if not channel:
+                return
+
+            tweets = tweets[::-1]
+            # If we've relayed this tweet before, skip it
+            new_tweets = [tweet for tweet in tweets if not await self.db.already_seen(tweet["id"], destination_channel_id)]
+            
+            if waking_up and len(new_tweets) > 0:
+                await channel.send("💤 ...! That was a nice nap 😹... I *may* have forgotten to tell you about these tweets...")
+
             # Iterate through the tweets, from oldest to newest
-            for tweet in tweets[::-1]:
-                # If we've relayed this tweet before, skip it
-                if await self.db.already_seen(tweet["id"], destination_channel_id):
-                    logging.debug(f"Skipping cached tweet {tweet['id']}")
-                    continue
-                
+            for tweet in new_tweets:
                 # Share the tweet with the channel, and cache it
-                channel = discord.utils.get(self.bot.get_all_channels(), id=int(destination_channel_id))
                 logging.info(f"New tweet: {tweet['id']} --> {destination_channel_id}")
                 await channel.send(f'https://twitter.com/{account}/status/{tweet["id"]}')
                 await self.db.add_tweet(tweet["id"], destination_channel_id)
@@ -67,10 +81,9 @@ class TweetManager():
 
 
     async def poll_tweets(self, account):
-        # Set the bearer
-            while True:
-                # Register the event location for relaying tweets - unique per twitter account and channel)
-                for destination_channel_id in self.relay_map[account]:
-                    await self.poll_tweets_for_channel(account, destination_channel_id)
-                await asyncio.sleep(30)
+        while True:
+            # Register the event location for relaying tweets - unique per twitter account and channel)
+            for destination_channel_id in self.relay_map[account]:
+                await self.poll_tweets_for_channel(account, destination_channel_id)
+            await asyncio.sleep(30)
         
