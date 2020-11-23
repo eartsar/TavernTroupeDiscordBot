@@ -32,5 +32,5 @@ jobs:
           script: |
             cd ${{ secrets.SERVICE_PATH }}
             git pull
-            echo ${{ secrets.VPS_PW }} | sudo su -S -c 'systemctl restart tavern-troupe-discord-bot'
+            echo ${{ secrets.VPS_PW }} | sudo -S su -c 'systemctl restart tavern-troupe-discord-bot'
             echo 'All done!'
