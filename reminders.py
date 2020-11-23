@@ -219,7 +219,6 @@ class ReminderManager():
             description = BeautifulSoup(description, "lxml").text
         
         newline = "\n"
-        return f'{future_event["summary"]}'\
-            f'{newline}    {when_str}' \
+        return f'{future_event["summary"]}    {when_str}{newline}'\
             f'{newline + location if location else ""}' \
-            f'{newline + description if description else ""}'
+            f'{newline + description if description else ""}'.strip()
