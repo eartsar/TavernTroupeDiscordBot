@@ -144,10 +144,12 @@ class ReminderManager():
         if not channel:
             return
 
-        if not calendar_name or calendar_name not in self.relay_map:
-            newline = "\n" # fstring quirk
-            await channel.send(f'🙀  I only know of these calendars.\n```{newline.join(self.relay_map.keys())}```')
-            return
+        available_calendars = '\n'.join(self.relay_map.keys()) 
+        if not calendar_name:
+            return await channel.send(f'😾  Which one? Try using `!event <calendar>` with one of these.\n```{available_calendars}```')
+            
+        if calendar_name not in self.relay_map:
+            return await channel.send(f'🙀  I only know of these calendars.\n```{available_calendars}```')
         
         calendar_id = self.relay_map[calendar_name]['calendar_id']
         right_now = right_now = datetime.now(timezone.utc)
