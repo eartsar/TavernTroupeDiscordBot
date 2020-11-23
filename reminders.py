@@ -112,11 +112,11 @@ class ReminderManager():
                 return
 
             # Some events may only have a date. This just converts those dates to datetime objects (midnight on date).
-            await self._change_events_start_date_to_datetime(future_events)
+            await self._change_events_start_date_to_datetime(uncached_future_events)
 
             # Filter out anything that's not actually in the "window"
             to_notify = []
-            for future_event in future_events:
+            for future_event in uncached_future_events:
                 start = future_event['start']
                 when = datetime.fromisoformat(future_event['start']['dateTime'])
                 if when >= start_after and when < start_before:
