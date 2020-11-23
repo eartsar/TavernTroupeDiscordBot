@@ -1,6 +1,6 @@
 # This is a basic workflow to help you get started with Actions
 
-name: CI
+name: Deploy
 
 # Controls when the action will run. 
 on:
@@ -32,6 +32,6 @@ jobs:
           script: |
             cd ${{ secrets.SERVICE_PATH }}
             git pull
-            sudo su
+            echo ${{ secrets.VPS_PW }} | sudo su
             systemctl restart tavern-troupe-discord-bot
             echo 'All done!'
