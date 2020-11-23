@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from dateutil import tz
 from calendar import monthrange
 from requests.structures import CaseInsensitiveDict
+from bs4 import BeautifulSoup
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 # Poll interval in seconds
@@ -125,16 +126,12 @@ class ReminderManager():
                 return
 
             # Construct the message for the notification.
-            msg = f"{prompt}\n```"
+            msg = f"{prompt}\n"
             for future_event in to_notify:
-                start = future_event['start']
-                when = datetime.fromisoformat(future_event['start']['dateTime'])
-                logging.debug(f'  {start_after.isoformat(timespec="seconds")}  -  {start_before.isoformat(timespec="seconds")}')
-                logging.info(f"  Event reminder being sent from calendar {calendar_id} to channel {channel.id}.")
                 cache.add(future_event['id'])
-                when_str = when.strftime("%A, %d. %B %Y %I:%M%p %Z")
-                msg += f'{future_event["summary"]} - {when_str}\n'
-            msg += '```'
+                event_as_str = await self._render_event(future_event)
+                msg += f'```{event_as_str}```' + "\n"
+                logging.info(f"  Event {future_event['id']} reminder being sent from calendar {calendar_id} to channel {channel.id}.")
             await channel.send(msg)
         except Exception as e:
             logging.exception(f'Exception thrown while attempting to check events on calendar {calendar_id} for channel {channel.id}')
@@ -190,13 +187,14 @@ class ReminderManager():
         await self._change_events_start_date_to_datetime(future_events)
         future_events = sorted(future_events, key=lambda item: datetime.fromisoformat(item['start']['dateTime']))
 
-        msg = "📅  🐱 💬  There are some meetings and events coming up...\n```"
+        msg = "📅  🐱 💬  There are some meetings and events coming up...\n"
         for future_event in future_events:
-            start = future_event['start']
-            when = datetime.fromisoformat(future_event['start']['dateTime']).astimezone(EASTERN_TIMEZONE)
-            when_str = when.strftime("%A, %d. %B %Y %I:%M%p %Z").replace('12:00AM EST', '')
-            msg += f'{future_event["summary"]} - {when_str}\n'
-        msg += '```'
+            event_as_str = await self._render_event(future_event)
+
+            if len(msg + event_as_str) > 1900:
+                break
+
+            msg += f'```{event_as_str}```' + "\n"
         await channel.send(msg)
 
 
@@ -206,3 +204,22 @@ class ReminderManager():
             if 'date' in start:
                 new_start = {'dateTime': start['date'] + 'T00:00:00-00:00'}
                 future_event['start'] = new_start
+
+
+    async def _render_event(self, future_event):
+        start = future_event['start']
+        when = datetime.fromisoformat(future_event['start']['dateTime']).astimezone(EASTERN_TIMEZONE)
+        when_str = when.strftime("%A, %d. %B %Y %I:%M%p %Z").replace('12:00AM EST', '')
+        location = future_event['location'] if 'location' in future_event else ''
+        description = future_event['description'] if 'description' in future_event else ''
+
+        # sanitize html nonsense from the description
+        if BeautifulSoup(description, 'html.parser').find():
+            description = description.replace('<br>', '\n').replace('<wbr>', '').replace('&nbsp;', '')
+            description = BeautifulSoup(description, "lxml").text
+        
+        newline = "\n"
+        return f'{future_event["summary"]}'\
+            f'{newline}    {when_str}' \
+            f'{newline + location if location else ""}' \
+            f'{newline + description if description else ""}'
