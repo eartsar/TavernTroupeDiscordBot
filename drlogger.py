@@ -16,9 +16,9 @@ import discord
 class DRLoggerManager():
     def __init__(self, bot, credentials, upload_channel_id, log_prefix):
         self.bot = bot
-        self.username = credentials['username']
-        self.password = credentials['password']
-        self.character = credentials['character']
+        self.username = credentials['username'] if credentials else None
+        self.password = credentials['password'] if credentials else None
+        self.character = credentials['character'] if credentials else None
         self.upload_channel_id = upload_channel_id
         self.log_prefix = log_prefix
         self.running = False
@@ -167,7 +167,7 @@ class DRLoggerManager():
         
         log_path = os.path.join('tt/temp', log_name)
         pane.send_keys('tt++ dr.tin', enter=True)
-        time.sleep(15)
+        time.sleep(30)
         
         pane.send_keys('#config log plain', enter=True)
         pane.send_keys(f'#log overwrite {log_path}', enter=True)
