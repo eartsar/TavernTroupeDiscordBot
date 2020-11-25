@@ -1,14 +1,19 @@
 import argparse
+import re
+import logging
+import asyncio
 
 import yaml
 import discord
-import asyncio
-import logging
+import requests
 
 from persist import DatabaseManager
 from tweets import TweetManager
 from reminders import ReminderManager
 from drlogger import DRLoggerManager
+
+
+from util import ValueRetainingRegexMatcher
 
 logging.basicConfig(
     level=logging.INFO,
@@ -47,7 +52,34 @@ DRLOG_AUTHORIZED_USER_IDS = config['log_authorized_users'] if DRLOGGER_ENABLED e
 DRLOG_UPLOAD_CHANNEL_ID = config['log_upload_channel'] if DRLOGGER_ENABLED else None
 DRLOG_FILENAME_PREFIX = config['log_filename_prefix'] if DRLOGGER_ENABLED else None
 
+SIGNATURE_EMOJI = '<:wafflebot:780940516140515359>'
 
+
+HELP_TEXT = '''\
+ BOT UTILITY FUNCTIONS
+-----------------------
+!ping                           Test command to ensure the bot is healthy.
+!help                           Displays this message
+
+     FUN FUNCTIONS
+-----------------------
+!nice                           Having a rough day? I'll say something nice!
+!joke                           ...Or tell you a joke!
+
+   HELPFUL FUNCTIONS
+-----------------------
+!events <calendar_name>         Pull up the events for the named calendar for this month and next month
+                                Keep calendar_name blank to get a list of calendars the bot knows of.
+!log <start|stop>               Tells the troupe scribe to start or stop their note-taking (requires permission).'''
+
+
+# Command regex
+PING_REGEX = re.compile(r'!ping')
+CALENDAR_REGEX = re.compile(r'!events(?: (.+))')
+DRLOGGER_REGEX = re.compile(r'!log (start|stop)')
+NICE_REGEX = re.compile('!nice')
+JOKE_REGEX = re.compile('!joke')
+HELP_REGEX = re.compile('!help')
 
 class TroupeTweetBot(discord.Client):
     def __init__(self):
@@ -76,32 +108,35 @@ class TroupeTweetBot(discord.Client):
         if not message.content.startswith('!'):
             return
 
-        if message.content == '!ping':
+        # Match against the right command, grab args, and go
+        m = ValueRetainingRegexMatcher(message.content)
+
+        # Process a command
+        if m.match(PING_REGEX):
             await message.channel.send(f'{message.author.mention} pong!')
-        elif CALENDAR_ENABLED and message.content.startswith('!events'):
-            tokens = message.content.split(' ')
-            name = tokens[1].strip() if len(tokens) > 1 else None
+        elif m.match(CALENDAR_REGEX) and CALENDAR_ENABLED:
+            name = m.group(1) if m.group(1) else None
             await self.reminders.get_upcoming_events(message.channel, calendar_name=name)
-        elif DRLOGGER_ENABLED and message.content.startswith('!log'):
+        elif m.match(DRLOGGER_REGEX) and DRLOGGER_ENABLED:
             tokens = message.content.split(' ')
-            name = tokens[1].strip() if len(tokens) > 1 else None
+            cmd = m.group(1) if m.group(1) else None
             if message.author.id not in DRLOG_AUTHORIZED_USER_IDS:
-                await message.channel.send('😾  You aren\'t allowed to do this! You\'ll have to ask the speakers to do this!')
-            elif name == 'start':
+                return await message.channel.send('😾  You aren\'t allowed to do this! You\'ll have to ask the speakers to do this!')
+            elif cmd == 'start':
                 await self.drlogger.start(message.channel)
-            elif name == 'stop':
+            elif cmd == 'stop':
                 await self.drlogger.stop(message.channel)
             else:
                 await message.channel.send('😾  You can start or stop logging with `!log <start|stop>`.')
-        elif message.content.startswith('!help'):
-            await message.channel.send('''😽  Here's what I know how to do (so far)!
-```\
-!ping                           Test command to ensure the bot is healthy.
-!events <calendar_name>         Pull up the events for the named calendar for this month and next month
-                                Keep calendar_name blank to get a list of calendars the bot knows of.
-!log <start|stop>               Tells the troupe scribe to start or stop their note-taking (requires permission).
-!help\
-```''')
+        elif m.match(NICE_REGEX):
+            compliment = requests.get('https://complimentr.com/api').json()['compliment']
+            await message.channel.send(f"{SIGNATURE_EMOJI} {compliment}")
+        elif m.match(JOKE_REGEX):
+            joke = requests.get('https://official-joke-api.appspot.com/jokes/random').json()
+            await message.channel.send(f"{SIGNATURE_EMOJI} {joke['setup']}\n    ...{joke['punchline']}")
+        elif m.match(HELP_REGEX):
+            await message.channel.send(f"😽  Here's what I know how to do (so far)!\n```{HELP_TEXT}```")
+
 
 
 def main():
