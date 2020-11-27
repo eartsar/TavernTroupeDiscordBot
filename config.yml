@@ -51,6 +51,8 @@ twitter_relay_map:
 # =======================
 #     CALENDAR CONFIG
 # =======================
+
+# Enables google calendar functionality. If false, google calendar configuration is not required
 enable_calendar: True
 
 # Path to the Google service account that will have access to the events calendar
@@ -91,3 +93,34 @@ reminder_relay_map:
       - <CHANNEL_ID>
     when:
       - <MINUTES>
+
+
+# =======================
+#     DRLOGGER CONFIG
+# =======================
+
+# Enables drlogger functionality, if false drlogger configuration is not required
+enable_drlogger: False
+
+# The account to which you want this bot to connect to for the purposes of running logs.
+# This bot makes use of the tintin++ client, but has its own EACCESS protocol implementation
+# and scripts/functions to apply, ported/stolen from https://github.com/dylb0t/dr-tin
+#
+# WARNING: YOU ARE SUPPLYING ACCOUNT CREDENTIALS. READ THE CODE AND USE AT YOUR OWN RISK.
+dr_account:
+  username: <ACCOUNT_NAME>
+  password: <ACCOUNT_PASSWORD>
+  character: <CHARACTER_NAME>
+
+# A list of authorized discord users who can use this dangerous feature.
+log_authorized_users:
+  - <DISCORD_USER_ID>
+
+# The channel to upload logs.
+log_upload_channel: <CHANNEL_ID>
+
+# The name template for the uploaded file. These will be appended with the date.
+# If prefix is "meeting_notes", the output file may look like:
+#   meeting_notes_20201123-221530.txt
+log_filename_prefix: meeting_notes
+
