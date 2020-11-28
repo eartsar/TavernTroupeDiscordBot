@@ -160,7 +160,7 @@ class PhotosManager():
         all_pics = glob.glob(os.path.join(self.photos_root_path, '*', album_name if album_name else '*', '*'))
         if album_name and not all_pics:
             return await message.channel.send(f'I couldn\'t find any photos for album `{album_name}` - did you spell it correctly?')
-        else:
+        elif not all_pics:
             return await message.channel.send(f'I couldn\'t find any photos!')
         random_pic = random.choice(all_pics)
         with open(random_pic, 'rb') as f:
