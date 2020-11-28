@@ -46,6 +46,8 @@ If you think this disclaimer missed anything that should be made clear, or
 if you have any questions or comments about what I do with your data, please
 do not hesitate to reach out to Discord user eartsar#3210 - my creator.```'''
 
+ACCEPTABLE_FILETYPES = ('jpg', 'jpeg', 'gif', 'png', 'tiff')
+
 
 def requires_disclaimer(fn):
     from functools import wraps
@@ -161,8 +163,7 @@ class PhotosManager():
 
         if message.attachments:
             attachment = message.attachments[0]
-            ext = ('jpg', 'jpeg', 'gif', 'png', 'tiff')
-            if not any([attachment.filename.endswith(_) for _ in ext]):
+            if not any([attachment.filename.lower().endswith(_) for _ in ACCEPTABLE_FILETYPES]):
                 return await message.channel.send(f'{message.author.mention} - The attached file is not a valid photo or archive.')
             
             if attachment.size > 8388608:
@@ -182,8 +183,6 @@ class PhotosManager():
 
 
 def extract_from_google_drive(drive_url, album_path):
-    ext = ('jpg', 'jpeg', 'gif', 'png', 'tiff')
-
     start = drive_url.find('drive.google.com/file/d/')
     drive_id = drive_url[start:].split('/')[3]
     drive_url = f'https://drive.google.com/uc?id={drive_id}'
@@ -199,7 +198,7 @@ def extract_from_google_drive(drive_url, album_path):
         album_files = os.listdir(album_path)
         for file in album_files:
             file_path = os.path.join(album_path, file)
-            if not any([file.endswith(_) for _ in ext]):
+            if not any([file.lower().endswith(_) for _ in ACCEPTABLE_FILETYPES]):
                 logging.info(f'petpic: Removing non-supported file: {file_path}')
                 os.remove(file_path)
             elif os.path.getsize(file_path) > 8388608:
