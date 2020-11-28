@@ -5,9 +5,12 @@ import shutil
 import os
 import random
 import glob
+import zipfile
+import tempfile
 
 import discord
 import aiofiles
+import gdown
 
 
 DISCLAIMER_MESSAGE = '''\
@@ -156,13 +159,13 @@ class PhotosManager():
         elif not message.attachments and not url:
             return await message.channel.send(f'{message.author.mention} - You need to attach either a photo or supply a url to download from')
 
-        if attachments:
+        if message.attachments:
             attachment = message.attachments[0]
             ext = ('jpg', 'jpeg', 'gif', 'png', 'tiff')
             if not any([attachment.filename.endswith(_) for _ in ext]):
                 return await message.channel.send(f'{message.author.mention} - The attached file is not a valid photo or archive.')
             
-            if attachment.size > 8388608 and not attachment.filename.endswith('zip'):
+            if attachment.size > 8388608:
                 return await message.channel.send(f'{message.author.mention} - Image files must be less than 8 Megabytes')
             
             try:
@@ -170,7 +173,37 @@ class PhotosManager():
             except Exception:
                 return await message.channel.send(f'{message.author.mention} - Something went wrong when downloading the file.')
         elif url:
-            return
+            # https://drive.google.com/file/d/1Ir_MPdJIGviX41Yykc_X8xTA66CQlhSa/view?usp=sharing
+            if 'drive.google.com/file/d/' in url:
+                num_added = await asyncio.get_event_loop().run_in_executor(None, extract_from_google_drive, url, album_path)
+                await message.channel.send(f'{message.author.mention} - {str(num_added)} files were added to album `{album_name}`.')
         
         return await message.add_reaction('✅')
+
+
+def extract_from_google_drive(drive_url, album_path):
+    ext = ('jpg', 'jpeg', 'gif', 'png', 'tiff')
+
+    start = drive_url.find('drive.google.com/file/d/')
+    drive_id = drive_url[start:].split('/')[3]
+    drive_url = f'https://drive.google.com/uc?id={drive_id}'
+    
+    num_files = 0
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        download_path = os.path.join(tmpdirname, 'temp.zip')
+        gdown.download(drive_url, download_path, quiet=True)
+        with zipfile.ZipFile(download_path, "r") as zip_ref:
+            num_files = len(zip_ref.namelist())
+            zip_ref.extractall(album_path)
+        
+        album_files = os.listdir(album_path)
+        for file in album_files:
+            file_path = os.path.join(album_path, file)
+            if not any([file.endswith(_) for _ in ext]):
+                logging.info(f'petpic: Removing non-supported file: {file_path}')
+                os.remove(file_path)
+            elif os.path.getsize(file_path) > 8388608:
+                logging.info(f'petpic: Removing large file: {file_path}')
+                os.remove(file_path)
+    return num_files
 

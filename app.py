@@ -101,7 +101,7 @@ DRLOGGER_REGEX = re.compile(r'!log (start|stop)')
 NICE_REGEX = re.compile(r'!nice')
 JOKE_REGEX = re.compile(r'!joke')
 HELP_REGEX = re.compile(r'!help')
-PETPIC_REGEX = re.compile(r'!petpic (add|create|delete|list|random|remove|upload|wipe)(?: (.+))?')
+PETPIC_REGEX = re.compile(r'!petpic (add|create|delete|list|random|remove|upload|wipe)(?: ([^\s\\]+))?(?: (.+))?')
 
 class TroupeTweetBot(discord.Client):
     def __init__(self):

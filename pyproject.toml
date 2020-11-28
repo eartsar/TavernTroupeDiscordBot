@@ -19,6 +19,7 @@ bs4 = "^0.0.1"
 lxml = "^4.6.1"
 libtmux = "^0.8.5"
 aiofiles = "^0.6.0"
+gdown = "^3.12.2"
 
 [tool.poetry.dev-dependencies]
 
