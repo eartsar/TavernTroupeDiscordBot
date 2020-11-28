@@ -149,7 +149,7 @@ class PhotosManager():
             albums_with_sizes[album] = len(files)
         newline = '\n'
         album_listing = '\n'.join([f'{album} - {albums_with_sizes[album]} photos.' for album in albums])
-        return await message.channel.send(f'{message.author.mention} - you have the following albums:```\n{album_listing}```')
+        return await message.channel.send(f'{message.author.mention} - I found the following albums:```\n{album_listing}```')
 
 
     async def fetch(self, message, album_name):
