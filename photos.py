@@ -110,17 +110,17 @@ class PhotosManager():
 
     @requires_disclaimer
     async def create_album(self, message, album_name):
-        album_path = os.path.join(self.photos_root_path, str(message.author.id), album_name.lower())
+        album_path = os.path.join(self.photos_root_path, str(message.author.id), album_name)
         os.makedirs(album_path, exist_ok=True)
-        return await message.channel.send(f'{message.author.mention} - Created album `{album_name.lower()}`.')
+        return await message.channel.send(f'{message.author.mention} - Created album `{album_name}`.')
 
 
     async def delete_album(self, message, album_name):
         album_path = os.path.join(self.photos_root_path, str(message.author.id), album_name)
         if not os.path.exists(album_path):
-            return await message.channel.send(f'{message.author.mention} - You don\'t have an album named `{album_name.lower()}`.')
+            return await message.channel.send(f'{message.author.mention} - You don\'t have an album named `{album_name}`.')
         await asyncio.to_thread(shutil.rmtree, album_path)
-        return await message.channel.send(f'{message.author.mention} - Deleted album `{album_name.lower()}`.')
+        return await message.channel.send(f'{message.author.mention} - Deleted album `{album_name}`.')
 
 
     async def wipe_albums(self, message):
@@ -176,7 +176,7 @@ class PhotosManager():
 
         album_path = os.path.join(self.photos_root_path, str(message.author.id), album_name)
         if not os.path.exists(album_path):
-            return await message.channel.send(f'{message.author.mention} - You don\'t have an album named `{album_name.lower()}`.')
+            return await message.channel.send(f'{message.author.mention} - You don\'t have an album named `{album_name}`.')
         elif not message.attachments and not url:
             return await message.channel.send(f'{message.author.mention} - You need to attach either a photo or supply a url to download from')
 

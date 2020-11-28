@@ -168,7 +168,7 @@ class TroupeTweetBot(discord.Client):
             await message.channel.send(f"{SIGNATURE_EMOJI} {joke['setup']}\n    ...{joke['punchline']}")
         elif m.match(PETPIC_REGEX) and PETPIC_ENABLED:
             cmd = m.group(1)
-            album_name = m.group(2) if m.group(2) else None
+            album_name = m.group(2).lower() if m.group(2) else None
             if cmd in ('add', 'upload') and album_name:
                 url = m.group(3) if m.group(3) else None
                 await self.pics.upload(message, album_name, url)
