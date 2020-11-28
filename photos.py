@@ -127,7 +127,7 @@ class PhotosManager():
 
 
     async def list_albums(self, message):
-        albums = glob.glob(os.path.join(self.photos_root_path, '*', '*'))
+        albums = glob.glob(os.path.join(self.photos_root_path, str(message.author.id), '*'))
         if not albums:
             return await message.channel.send(f'{message.author.mention} - you don\'t have any albums!')
         dirs = sorted([os.path.basename(os.path.normpath(_.lower())) for _ in albums])
