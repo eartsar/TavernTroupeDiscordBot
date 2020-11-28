@@ -145,7 +145,11 @@ class PhotosManager():
         albums = sorted([os.path.basename(os.path.normpath(_.lower())) for _ in albums])
         albums_with_sizes = {}
         for album in albums:
-            files = glob.glob(os.path.join(self.photos_root_path, str(message.author.id), album, '*'))
+            files = []
+            if all_albums:
+                files = glob.glob(os.path.join(self.photos_root_path, '*', album, '*'))
+            else:
+                files = glob.glob(os.path.join(self.photos_root_path, str(message.author.id), album, '*'))
             albums_with_sizes[album] = len(files)
         newline = '\n'
         album_listing = '\n'.join([f'{album} - {albums_with_sizes[album]} photos.' for album in albums])
