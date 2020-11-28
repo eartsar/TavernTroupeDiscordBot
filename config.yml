@@ -13,6 +13,9 @@ bot_token: <BOT_TOKEN>
 # The directory structure must exist. If the file does not exist, the bot will create it.
 sqlite3_database_path: /path/to/db
 
+# Where to log output
+logging_path: bot.log
+
 
 
 # ======================
@@ -93,6 +96,25 @@ reminder_relay_map:
       - <CHANNEL_ID>
     when:
       - <MINUTES>
+
+
+# =======================
+#      PETPIC CONFIG
+# =======================
+
+# Enables petpic functionality
+enable_petpic: True
+
+# Photos root path
+petpic_root_path: path/to/photos/directory
+
+
+# =======================
+#       FUN CONFIG
+# =======================
+
+# Enables compliments, jokes, and other silly things.
+enable_fun: True
 
 
 # =======================
