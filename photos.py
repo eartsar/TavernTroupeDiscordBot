@@ -3,6 +3,7 @@ import asyncio
 import logging
 import shutil
 import os
+import random
 
 import discord
 import aiofiles
@@ -138,8 +139,16 @@ class PhotosManager():
 
     @requires_disclaimer
     async def fetch(self, message, album_name):
-        pass
-        
+        mass_files = []
+        for path, directories, files in os.walk('local_storage/photos'):
+            if files:
+                for file in files:
+                    mass_files.append(os.path.join(path, file))
+        random_pic = random.choice(mass_files)
+        with open(random_pic, 'rb') as f:
+            send_file = discord.File(f, filename=f.name, spoiler=False)
+            return await message.channel.send("Here's a random pet photo! Who is it...?", file=send_file)
+
 
     @requires_disclaimer
     async def upload(self, message, album_name):
