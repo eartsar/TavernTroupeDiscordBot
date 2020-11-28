@@ -110,7 +110,6 @@ class PhotosManager():
         return await message.channel.send(f'{message.author.mention} - Created album `{album_name.lower()}`.')
 
 
-    @requires_disclaimer
     async def delete_album(self, message, album_name):
         album_path = os.path.join(self.photos_root_path, str(message.author.id), album_name)
         if not os.path.exists(album_path):
@@ -119,7 +118,6 @@ class PhotosManager():
         return await message.channel.send(f'{message.author.mention} - Deleted album `{album_name.lower()}`.')
 
 
-    @requires_disclaimer
     async def wipe_albums(self, message):
         user_path = os.path.join(self.photos_root_path, str(message.author.id))
         if not os.path.exists(user_path):
@@ -128,7 +126,6 @@ class PhotosManager():
         return await message.channel.send(f'{message.author.mention} - Wiped all your albums.')
 
 
-    @requires_disclaimer
     async def list_albums(self, message):
         user_path = os.path.join(self.photos_root_path, str(message.author.id))
         if not os.path.exists(user_path):
@@ -140,14 +137,13 @@ class PhotosManager():
         return await message.channel.send(f'{message.author.mention} - you have the following albums:```{newline.join(dirs)}```')
 
 
-    @requires_disclaimer
     async def fetch(self, message, album_name):
         all_pics = glob.glob(os.path.join(self.photos_root_path, '*', album_name if album_name else '*', '*'))
         random_pic = random.choice(all_pics)
         with open(random_pic, 'rb') as f:
             send_file = discord.File(f, filename=f.name, spoiler=False)
             return await message.channel.send(
-                f'Here\'s a random photo{" from album `" + album_name + "`" if album_name else ""}! Who is it...?', file=send_file)
+                f'Here\'s a random photo{" from album `" + album_name + "`!" if album_name else "! Who is it...?"}', file=send_file)
 
 
     @requires_disclaimer
