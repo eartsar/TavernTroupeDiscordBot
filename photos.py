@@ -147,6 +147,10 @@ class PhotosManager():
 
     async def fetch(self, message, album_name):
         all_pics = glob.glob(os.path.join(self.photos_root_path, '*', album_name if album_name else '*', '*'))
+        if album_name and not all_pics:
+            return await message.channel.send(f'I couldn\'t find any photos for album `{album_name}` - did you spell it correctly?')
+        else:
+            return await message.channel.send(f'I couldn\'t find any photos!')
         random_pic = random.choice(all_pics)
         with open(random_pic, 'rb') as f:
             send_file = discord.File(f, filename=f.name, spoiler=False)
@@ -180,8 +184,12 @@ class PhotosManager():
         elif url:
             # https://drive.google.com/file/d/1Ir_MPdJIGviX41Yykc_X8xTA66CQlhSa/view?usp=sharing
             if 'drive.google.com/file/d/' in url:
-                num_added = await asyncio.get_event_loop().run_in_executor(None, extract_from_google_drive, url, album_path)
-                await message.channel.send(f'{message.author.mention} - {str(num_added)} files were added to album `{album_name}`.')
+                try:
+                    num_added = await asyncio.get_event_loop().run_in_executor(None, extract_from_google_drive, url, album_path)
+                    await message.channel.send(f'{message.author.mention} - {str(num_added)} files were added to album `{album_name}`.')
+                except Exception:
+                    return await message.channel.send(f'{message.author.mention} - Something went wrong with fetching the zip. ' + 
+                        'Make sure the zip link is publicly accessible, and the zip has on folders inside.')
         
         return await message.add_reaction('✅')
 
