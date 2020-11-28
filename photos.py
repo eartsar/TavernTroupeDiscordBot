@@ -4,41 +4,44 @@ import logging
 import shutil
 import os
 import random
+import glob
 
 import discord
 import aiofiles
 
 
 DISCLAIMER_MESSAGE = '''\
-```!!!BEFORE YOU DO ANYTHING WITH THIS FEATURE YOU MUST READ THE STUFF BELOW!!!
+ℹ️ BEFORE YOU USE THIS FEATURE, YOU MUST READ THE FOLLOWING DISCLAIMER ℹ️
 
-Heya fam. I'm not a lawyer or anything, but I need to be *really clear* 
-about a few things before you do this.
+```Hi trouper. I'm not a lawyer or anything, but I need to be *really clear* 
+about a few things before you do this. Also, sorry for constantly popping
+this up - I do it whenever the underlying code has changed. So if you're
+seeing this - it's because I'm a new, shinier version of myself!
 
-1 - You are uploading a file to my personal server. Don't do this unless 
-    you're comfortable with that. This should be obvious, but here. I said
-    it.
-2 - While I will attempt to create functionality to allow you to remove 
-    photos, I cannot promise an indefinite ability to do so. If Wafflebot
-    is not running, feel free to reach out to me if you want to make sure
-    these photos are deleted. I will obviously comply, but you are trusting
-    me - the author - to do so.
-3 - You're giving consent for other people to view these photos through
-    the current features implemented, and future ones. I will do my best to
-    only create features that are respectful of these photos, and not be
-    sketchy, but again, you are trusting me to do so.
-4 - You will not upload anything even questionnably inappropriate. If you do,
-    you risk this bot being shut down forever. Furthermore, you'll earn my
-    ire, and you REALLY DO NOT want to do that. Ask me about the fools that
-    bought the compromised credentials to my Playstation account sometime.
-    I tracked them down in the Ukraine. I'm not kidding. Don't make me mad.
+1 - You are uploading a file to a personal server. Don't do this unless 
+    you're comfortable with that. This should be obvious, I said it.
+
+2 - While I SHOULD have working functionality to remove photos, I can't
+    PROMISE the capability in perpetuity.
+
+3 - You're giving consent for other people in this Discord server - or any
+    other Discord server I might be installed on - to potentially view these
+    photos through the current implemented features that I support.
+
+4 - I will do my best to be respectful with your data.
+
+4 - You will NOT give me anything even REMOTELY inappropriate. Failure to
+    adhere to this can result in me being turned off, or worse.
+
 5 - By clicking the 🆗 emoji below, you understand the risks you're taking
-    in using this feature. I mean, you're already uploading photos to
-    Discord, so you might wanna think about that, too. In either case, I'll
-    do my best to not breach the trust you've put in me.
+    in using this feature. You recognize that anything that happens after
+    submitting data to me is out of your hands. You also recognize that
+    I've given my word, and if I fail to uphold my end of the bargain,
+    you're within your right to be pissed off and seek revenge.
 
-!!!BEFORE YOU DO ANYTHING WITH THIS FEATURE YOU MUST READ THE STUFF ABOVE!!!```
-'''
+If you think this disclaimer missed anything that should be made clear, or
+if you have any questions or comments about what I do with your data, please
+do not hesitate to reach out to Discord user eartsar#3210 - my creator.```'''
 
 
 def requires_disclaimer(fn):
@@ -55,7 +58,7 @@ def requires_disclaimer(fn):
                     return await message.author.send(f'You have to accept the disclaimer here: {key.jump_url}')
             # send them a disclaimer
             disclaimer_msg = await message.author.send(DISCLAIMER_MESSAGE)
-            await disclaimer_msg.add_reaction('✅')
+            await disclaimer_msg.add_reaction('🆗')
             await disclaimer_msg.add_reaction('🛑')
             self.pending_cache[disclaimer_msg] = user_id
             return
@@ -88,7 +91,7 @@ class PhotosManager():
         
         # If the reaction is from the owner, and a valid option, interpet it. Otherwise, purge.
         if user.id == self.pending_cache[reaction.message] and reaction.count > 1:
-            if reaction.emoji == '✅':
+            if reaction.emoji == '🆗':
                 del self.pending_cache[reaction.message]
                 self.accepted_cache.add(user.id)
                 await user.send('👍  You may now use the feature.')
@@ -139,15 +142,12 @@ class PhotosManager():
 
     @requires_disclaimer
     async def fetch(self, message, album_name):
-        mass_files = []
-        for path, directories, files in os.walk('local_storage/photos'):
-            if files:
-                for file in files:
-                    mass_files.append(os.path.join(path, file))
-        random_pic = random.choice(mass_files)
+        all_pics = glob.glob(os.path.join(self.photos_root_path, '*', album_name if album_name else '*', '*'))
+        random_pic = random.choice(all_pics)
         with open(random_pic, 'rb') as f:
             send_file = discord.File(f, filename=f.name, spoiler=False)
-            return await message.channel.send("Here's a random pet photo! Who is it...?", file=send_file)
+            return await message.channel.send(
+                f'Here\'s a random photo{" from album `" + album_name + "`" if album_name else ""}! Who is it...?', file=send_file)
 
 
     @requires_disclaimer
