@@ -175,7 +175,8 @@ class TroupeTweetBot(discord.Client):
             elif cmd == 'random':
                 await self.pics.fetch(message, album_name)
             elif cmd == 'list':
-                await self.pics.list_albums(message)
+                all_albums = m.group(2).lower() == 'all' if m.group(2) else False
+                await self.pics.list_albums(message, all_albums=all_albums)
             elif cmd == 'create' and album_name:
                 await self.pics.create_album(message, album_name)
             elif cmd in ('delete', 'remove') and album_name:

@@ -131,10 +131,17 @@ class PhotosManager():
         return await message.channel.send(f'{message.author.mention} - Wiped all your albums.')
 
 
-    async def list_albums(self, message):
-        albums = glob.glob(os.path.join(self.photos_root_path, str(message.author.id), '*'))
-        if not albums:
-            return await message.channel.send(f'{message.author.mention} - you don\'t have any albums!')
+    async def list_albums(self, message, all_albums=False):
+        albums = []
+        if all_albums:
+            albums = glob.glob(os.path.join(self.photos_root_path, '*', '*'))
+            if not albums:
+                return await message.channel.send(f'{message.author.mention} - there aren\'t any albums! Make the first one!')
+        else:
+            albums = glob.glob(os.path.join(self.photos_root_path, str(message.author.id), '*'))
+            if not albums:
+                return await message.channel.send(f'{message.author.mention} - you don\'t have any albums!')
+        
         albums = sorted([os.path.basename(os.path.normpath(_.lower())) for _ in albums])
         albums_with_sizes = {}
         for album in albums:
