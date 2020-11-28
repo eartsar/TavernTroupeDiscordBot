@@ -170,7 +170,8 @@ class TroupeTweetBot(discord.Client):
             cmd = m.group(1)
             album_name = m.group(2) if m.group(2) else None
             if cmd in ('add', 'upload') and album_name:
-                await self.pics.upload(message, album_name)
+                url = m.group(3) if m.group(3) else None
+                await self.pics.upload(message, album_name, url)
             elif cmd == 'random':
                 await self.pics.fetch(message, album_name)
             elif cmd == 'list':

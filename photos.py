@@ -127,14 +127,13 @@ class PhotosManager():
 
 
     async def list_albums(self, message):
-        user_path = os.path.join(self.photos_root_path, str(message.author.id))
-        if not os.path.exists(user_path):
+        albums = glob.glob(os.path.join(self.photos_root_path, '*', '*'))
+        if not albums:
             return await message.channel.send(f'{message.author.mention} - you don\'t have any albums!')
-        dirs = sorted([_.lower() for _ in os.listdir(user_path) if os.path.isdir(os.path.join(user_path, _))])
-        if not dirs:
-            return await message.channel.send(f'{message.author.mention} - you don\'t have any albums!')
+        dirs = sorted([os.path.basename(os.path.normpath(_.lower())) for _ in albums])
         newline = '\n'
-        return await message.channel.send(f'{message.author.mention} - you have the following albums:```{newline.join(dirs)}```')
+        album_listing = '\n'.join(dirs)
+        return await message.channel.send(f'{message.author.mention} - you have the following albums:```\n{album_listing}```')
 
 
     async def fetch(self, message, album_name):
@@ -147,25 +146,31 @@ class PhotosManager():
 
 
     @requires_disclaimer
-    async def upload(self, message, album_name):
+    async def upload(self, message, album_name, url):
+        if not album_name:
+            return await message.channel.send(f'{message.author.mention} - You need to tell me which album to add to.')
+
         album_path = os.path.join(self.photos_root_path, str(message.author.id), album_name)
         if not os.path.exists(album_path):
             return await message.channel.send(f'{message.author.mention} - You don\'t have an album named `{album_name.lower()}`.')
-        elif not message.attachments:
-            return await message.channel.send(f'{message.author.mention} - You need to attach either a photo or an archive.')
+        elif not message.attachments and not url:
+            return await message.channel.send(f'{message.author.mention} - You need to attach either a photo or supply a url to download from')
 
-        attachment = message.attachments[0]
-        ext = ('jpg', 'jpeg', 'gif', 'png', 'tiff')
-        if not any([attachment.filename.endswith(_) for _ in ext]):
-            return await message.channel.send(f'{message.author.mention} - The attached file is not a valid photo or archive.')
+        if attachments:
+            attachment = message.attachments[0]
+            ext = ('jpg', 'jpeg', 'gif', 'png', 'tiff')
+            if not any([attachment.filename.endswith(_) for _ in ext]):
+                return await message.channel.send(f'{message.author.mention} - The attached file is not a valid photo or archive.')
+            
+            if attachment.size > 8388608 and not attachment.filename.endswith('zip'):
+                return await message.channel.send(f'{message.author.mention} - Image files must be less than 8 Megabytes')
+            
+            try:
+                await attachment.save(os.path.join(album_path, attachment.filename))
+            except Exception:
+                return await message.channel.send(f'{message.author.mention} - Something went wrong when downloading the file.')
+        elif url:
+            return
         
-        if attachment.size > 8388608 and not attachment.filename.endswith('zip'):
-            return await message.channel.send(f'{message.author.mention} - Image files must be less than 8 Megabytes')
-        
-        try:
-            await attachment.save(os.path.join(album_path, attachment.filename))
-        except Exception:
-            return await message.channel.send(f'{message.author.mention} - Something went wrong when downloading the file.')
-
         return await message.add_reaction('✅')
 
