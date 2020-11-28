@@ -135,9 +135,13 @@ class PhotosManager():
         albums = glob.glob(os.path.join(self.photos_root_path, str(message.author.id), '*'))
         if not albums:
             return await message.channel.send(f'{message.author.mention} - you don\'t have any albums!')
-        dirs = sorted([os.path.basename(os.path.normpath(_.lower())) for _ in albums])
+        albums = sorted([os.path.basename(os.path.normpath(_.lower())) for _ in albums])
+        albums_with_sizes = {}
+        for album in albums:
+            files = glob.glob(os.path.join(self.photos_root_path, str(message.author.id), album, '*'))
+            albums_with_sizes[album] = len(files)
         newline = '\n'
-        album_listing = '\n'.join(dirs)
+        album_listing = '\n'.join([f'{album} - {albums_with_sizes[album]} photos.' for album in albums])
         return await message.channel.send(f'{message.author.mention} - you have the following albums:```\n{album_listing}```')
 
 
