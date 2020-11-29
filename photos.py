@@ -9,6 +9,7 @@ import zipfile
 import tempfile
 import time
 import hashlib
+import pathlib
 
 import discord
 import aiofiles
@@ -315,7 +316,9 @@ class PhotosManager():
         existing_path = await self.db.get_photo_path(user_id, album_name, photo_hash)
 
         # Delete the old file if there is one, we'll take the new one
-        if existing_path:
+        replaced_existing = False
+        if existing_path and os.path.exists(existing_path):
+            replaced_existing = True
             os.remove(existing_path)
 
         # Construct a new path to the new version of the file
@@ -326,7 +329,7 @@ class PhotosManager():
         shutil.move(photo_path, new_photo_path)
 
         logging_prefix = f'PhotoManager: user {user_id} album {album_name} - '
-        if existing_path:
+        if replaced_existing:
             logging.info(f'{logging_prefix} Replaced duplicate photo: {existing_path} --> {new_photo_path}')
         else:
             logging.info(f'{logging_prefix} New photo added: {new_photo_path}')
@@ -351,7 +354,6 @@ class PhotosManager():
             start = url.find('?dl=0')
             url = url[:start] + '?dl=1' + url[start + 5:]
 
-
         logging.info(f'Downloading from url {url}')
         with tempfile.TemporaryDirectory() as temp_dir:
             download_path = os.path.join(temp_dir, 'temp.zip')
@@ -364,23 +366,20 @@ class PhotosManager():
                     for chunk in r.iter_content(chunk_size=4096):
                         out_zip.write(chunk)
 
-
             logging.info(f'Extracting downloaded zip to {temp_dir}')
-            num_files = 0
             with zipfile.ZipFile(download_path, "r") as zip_ref:
-                num_files = len(zip_ref.namelist())
                 zip_ref.extractall(temp_dir)
+
             os.remove(download_path)
 
             extracted_photo_paths = []
             for ext in ACCEPTABLE_FILETYPES:
-                extracted_photo_paths.extend(glob.glob(os.path.join(temp_dir, f'*.{ext}')))
+                extracted_photo_paths.extend(pathlib.Path(temp_dir).rglob(f'*.{ext}'))
 
-            for temp_photo_path in extracted_photo_paths:
-                if os.path.getsize(temp_photo_path) > 8388608:
-                    continue
+            sanitized_photo_paths = [_ for _ in extracted_photo_paths if os.path.getsize(_) < 8388608]
+            for temp_photo_path in sanitized_photo_paths:
                 album_name = os.path.basename(album_path)
                 user_id = os.path.basename(os.path.dirname(album_path))
                 asyncio.run(self._place_photo(temp_photo_path, user_id, album_name))
 
-        return num_files
+        return len(sanitized_photo_paths)
