@@ -119,7 +119,7 @@ class PhotosManager():
         album_path = os.path.join(self.photos_root_path, str(message.author.id), album_name)
         if not os.path.exists(album_path):
             return await message.channel.send(f'{message.author.mention} - You don\'t have an album named `{album_name}`.')
-        await asyncio.get_event_loop().run_in_executor(shutil.rmtree, album_path)
+        await asyncio.get_event_loop().run_in_executor(None, shutil.rmtree, album_path)
         return await message.channel.send(f'{message.author.mention} - Deleted album `{album_name}`.')
 
 
@@ -127,7 +127,7 @@ class PhotosManager():
         user_path = os.path.join(self.photos_root_path, str(message.author.id))
         if not os.path.exists(user_path):
             return await message.channel.send(f'{message.author.mention} - you don\'t have any albums!')
-        await asyncio.get_event_loop().run_in_executor(shutil.rmtree, os.path.join(self.photos_root_path, str(message.author.id)))
+        await asyncio.get_event_loop().run_in_executor(None, shutil.rmtree, os.path.join(self.photos_root_path, str(message.author.id)))
         return await message.channel.send(f'{message.author.mention} - Wiped all your albums.')
 
 
