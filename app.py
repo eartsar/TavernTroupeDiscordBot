@@ -78,11 +78,13 @@ HELP_TEXT = '''\
 
    PETPIC FUNCTIONS
 -----------------------
-!petpic upload <name>           Upload a picture to a pet album. This must be the comment on a file upload to the bot.
+!petpic upload <name> [url]     Upload a picture to a pet album. This must be the comment on a file upload to the bot.
                                     Files can be singular images of any type, or .zip archives.
+                                If url is supplied, the bot will attempt to download from it.
 !petpic random [name]           Show a random pet picture.
                                     If name is supplied, show a random pic of that pet.
-!petpic list                    Shows a list of pets.
+!petpic list                    Shows a list of your albums
+!petpic list all                Shows a list of everyone's albums
 !petpic create <name>           Create a new album for a pet.
 !petpic delete <name>           Delete a pet album (and all associated pictures).
 !petpic wipe                    Delete ALL your pet pictures (asks confirmation).
