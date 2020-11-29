@@ -13,6 +13,7 @@ import hashlib
 import discord
 import aiofiles
 import gdown
+import requests
 
 
 DISCLAIMER_MESSAGE = '''\
@@ -279,8 +280,8 @@ class PhotosManager():
             # Uploaded file meets all requirements
             try:
                 # Create a temporary space to download the photo, then do the proper placement
-                with tempfile.TemporaryDirectory() as tmpdirname:
-                    temp_photo_path = os.path.join(tmpdirname, attachment.filename)
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    temp_photo_path = os.path.join(temp_dir, attachment.filename)
                     await attachment.save(temp_photo_path)
                     await self._place_photo(temp_photo_path, message.author.id, album_name)
             except Exception:
@@ -289,19 +290,15 @@ class PhotosManager():
         
         # If the URL was supplied, branch into custom logic to download the archive, and handle accordingly
         elif url:
-            # https://drive.google.com/file/d/1Ir_MPdJIGviX41Yykc_X8xTA66CQlhSa/view?usp=sharing
-            if 'drive.google.com/file/d/' in url:
-                try:
-                    num_added = await asyncio.get_event_loop().run_in_executor(None, self.extract_from_google_drive, url, album_path)
-                    await message.channel.send(f'{message.author.mention} - {str(num_added)} files were added to album `{album_name}`.')
-                except Exception:
-                    logging.exception(f'Exception thrown while downloading from url ({url}) supplied by {message.author.id}')
-                    return await message.channel.send(f'{message.author.mention} - Something went wrong with fetching the zip. ' + 
-                        'Make sure the zip link is publicly accessible, and the zip has on folders inside.')
-            else:
-                await message.channel.send(f'{message.author.mention} - Photos uploaded from this source are not yet supported.')
-                logging.info(f'User {message.author.id} photo upload from url rejected: not yet supported ({url})')
-        
+            try:
+                num_added = await asyncio.get_event_loop().run_in_executor(None, self.download_and_extract, url, album_path)
+                await message.channel.send(f'{message.author.mention} - {str(num_added)} files were added to album `{album_name}`.')        
+            except Exception:
+                logging.exception(f'Exception thrown while downloading from url ({url}) supplied by {message.author.id}')
+                return await message.channel.send(f'{message.author.mention} - Something went wrong with fetching the zip. ' + 
+                    'Many cloud services have a landing page on publicly accessible files that I can\'t deal with. ' + 
+                    'Right now I know how to download from **Google Drive** and **Dropbox**, but I\'ll try any link you give me!')
+
         return await message.add_reaction('✅')
 
 
@@ -339,29 +336,45 @@ class PhotosManager():
 
     
 
-    def extract_from_google_drive(self, drive_url, album_path):
+    def download_and_extract(self, url, album_path):
         '''
-        Download from google drive
         NOT AN ASYNC METHOD - MUST RUN IN A THREAD
         '''
-        start = drive_url.find('drive.google.com/file/d/')
-        drive_id = drive_url[start:].split('/')[3]
-        drive_url = f'https://drive.google.com/uc?id={drive_id}'
+        method = 'direct'
+        # https://www.dropbox.com/s/nrb3cf7z0k1ch3l/two_waffle_pics.zip?dl=0
+        if 'drive.google.com/file/d/' in url:
+            method = 'google'
+            start = url.find('drive.google.com/file/d/')
+            drive_id = url[start:].split('/')[3]
+            url = f'https://drive.google.com/uc?id={drive_id}'
+        elif 'dropbox.com' in url and '?dl=0' in url:
+            start = url.find('?dl=0')
+            url = url[:start] + '?dl=1' + url[start + 5:]
 
-        num_files = 0
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            logging.info(f'Downloading from url {drive_url}')
-            download_path = os.path.join(tmpdirname, 'temp.zip')
-            gdown.download(drive_url, download_path, quiet=True)
-            logging.info(f'Extracting downloaded zip to {tmpdirname}')
+
+        logging.info(f'Downloading from url {url}')
+        with tempfile.TemporaryDirectory() as temp_dir:
+            download_path = os.path.join(temp_dir, 'temp.zip')
+            
+            if method == 'google':
+                gdown.download(url, download_path, quiet=True)
+            elif method == 'direct':
+                r = requests.get(url, stream=True)
+                with open(download_path, 'wb') as out_zip:
+                    for chunk in r.iter_content(chunk_size=4096):
+                        out_zip.write(chunk)
+
+
+            logging.info(f'Extracting downloaded zip to {temp_dir}')
+            num_files = 0
             with zipfile.ZipFile(download_path, "r") as zip_ref:
                 num_files = len(zip_ref.namelist())
-                zip_ref.extractall(tmpdirname)
+                zip_ref.extractall(temp_dir)
             os.remove(download_path)
 
             extracted_photo_paths = []
             for ext in ACCEPTABLE_FILETYPES:
-                extracted_photo_paths.extend(glob.glob(os.path.join(tmpdirname, f'*.{ext}')))
+                extracted_photo_paths.extend(glob.glob(os.path.join(temp_dir, f'*.{ext}')))
 
             for temp_photo_path in extracted_photo_paths:
                 if os.path.getsize(temp_photo_path) > 8388608:

@@ -81,6 +81,7 @@ HELP_TEXT = '''\
 !petpic upload <name> [url]     Upload a picture to a pet album. This must be the comment on a file upload to the bot.
                                     Files can be singular images of any type, or .zip archives.
                                 If url is supplied, the bot will attempt to download from it.
+                                Currently, direct links to zips, or share links from Google Drive and Dropbox work.
 !petpic random [name]           Show a random pet picture.
                                     If name is supplied, show a random pic of that pet.
 !petpic list                    Shows a list of your albums
