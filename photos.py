@@ -52,6 +52,14 @@ ACCEPTABLE_FILETYPES = ('jpg', 'jpeg', 'gif', 'png', 'tiff')
 
 
 def requires_disclaimer(fn):
+    '''
+    Decorator that forces the user to accept the disclaimer. This acceptance is
+    cached, and cleared on every code deploy.
+
+    @requires_disclaimer
+    async def some_function_where_consent_is_important(self, message, ...):
+        ...
+    '''
     from functools import wraps
     @wraps(fn)
     async def wrapper(self, message, *args, **kwargs):
@@ -81,12 +89,23 @@ class PhotosManager():
         self.bot = bot
         self.db = db
         self.photos_root_path = photos_root_path
+        
+        # set of user_ids who accepted the disclaimer
         self.accepted_cache = set()
+        
+        # dict from message --> user_id
+        # the key is the message of the command that triggered the disclaimer
         self.pending_cache = {}
+        
+        # dict of user_id --> string
+        # the last command entered that caused the disclaimer to pop up
         self.sent_command_cache = {}
 
 
     async def initialize(self):
+        '''
+        Indexes all unindexed photos.
+        '''
         logging.info("Initializing photos manager...")
         logging.info("\tUpdating photo hash index...")
 
@@ -130,7 +149,11 @@ class PhotosManager():
 
 
     async def reaction_handler(self, user, reaction):
-        # If this isn't a cached pending disclaimer, skip
+        '''
+        Hook that the main bot application calls on a reaction to see
+        if this object should do anything about it
+        '''
+        # Ignore reactions to messages that are not disclaimer messages
         if reaction.message not in self.pending_cache:
             return
         
@@ -150,12 +173,19 @@ class PhotosManager():
 
     @requires_disclaimer
     async def create_album(self, message, album_name):
+        '''
+        Create an album by creating a dir on disk
+        photo_root/{user_id}/{album_name}
+        '''
         album_path = os.path.join(self.photos_root_path, str(message.author.id), album_name)
         os.makedirs(album_path, exist_ok=True)
         return await message.channel.send(f'{message.author.mention} - Created album `{album_name}`.')
 
 
     async def delete_album(self, message, album_name):
+        '''
+        Delete an album on disk and all its contents
+        '''
         album_path = os.path.join(self.photos_root_path, str(message.author.id), album_name)
         if not os.path.exists(album_path):
             return await message.channel.send(f'{message.author.mention} - You don\'t have an album named `{album_name}`.')
@@ -164,6 +194,9 @@ class PhotosManager():
 
 
     async def wipe_albums(self, message):
+        '''
+        Delete all of a user's albums and contents
+        '''
         user_path = os.path.join(self.photos_root_path, str(message.author.id))
         if not os.path.exists(user_path):
             return await message.channel.send(f'{message.author.mention} - you don\'t have any albums!')
@@ -172,6 +205,9 @@ class PhotosManager():
 
 
     async def list_albums(self, message, all_albums=False):
+        '''
+        Get a list of all albums for a user, or all albums in general
+        '''
         albums = []
         if all_albums:
             albums = glob.glob(os.path.join(self.photos_root_path, '*', '*'))
@@ -197,6 +233,9 @@ class PhotosManager():
 
 
     async def fetch(self, message, album_name):
+        '''
+        Fetches a random photo and posts it
+        '''
         all_pics = glob.glob(os.path.join(self.photos_root_path, '*', album_name if album_name else '*', '*'))
         if album_name and not all_pics:
             return await message.channel.send(f'I couldn\'t find any photos for album `{album_name}` - did you spell it correctly?')
@@ -211,6 +250,12 @@ class PhotosManager():
 
     @requires_disclaimer
     async def upload(self, message, album_name, url):
+        '''
+        Adds photos to storage.
+
+        The bot will first assume that the photo is an attachment.
+        If a URL is supplied instead, it downloads that instead.
+        '''
         if not album_name:
             return await message.channel.send(f'{message.author.mention} - You need to tell me which album to add to.')
 
@@ -295,6 +340,10 @@ class PhotosManager():
     
 
     def extract_from_google_drive(self, drive_url, album_path):
+        '''
+        Download from google drive
+        NOT AN ASYNC METHOD - MUST RUN IN A THREAD
+        '''
         start = drive_url.find('drive.google.com/file/d/')
         drive_id = drive_url[start:].split('/')[3]
         drive_url = f'https://drive.google.com/uc?id={drive_id}'
