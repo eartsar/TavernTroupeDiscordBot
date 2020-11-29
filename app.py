@@ -109,7 +109,7 @@ class TroupeTweetBot(discord.Client):
         self.tweets = TweetManager(self, self.db, TWITTER_BEARER_TOKEN, TWITTER_RELAY_MAP)
         self.reminders = ReminderManager(self, GOOGLE_CAL_CREDS, REMINDER_RELAY_MAP)
         self.drlogger = DRLoggerManager(self, DR_ACCOUNT_INFO, DRLOG_UPLOAD_CHANNEL_ID, DRLOG_FILENAME_PREFIX)
-        self.pics = PhotosManager(self, PETPIC_ROOT_PATH)
+        self.pics = PhotosManager(self, self.db, PETPIC_ROOT_PATH)
         super().__init__()
 
 
@@ -120,6 +120,8 @@ class TroupeTweetBot(discord.Client):
             await self.tweets.initialize()
         if CALENDAR_ENABLED:
             await self.reminders.initialize()
+        if PETPIC_ENABLED:
+            await self.pics.initialize()
 
 
     async def on_reaction_add(self, reaction, user):

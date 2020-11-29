@@ -7,6 +7,8 @@ import random
 import glob
 import zipfile
 import tempfile
+import time
+import hashlib
 
 import discord
 import aiofiles
@@ -75,8 +77,9 @@ def requires_disclaimer(fn):
 
 
 class PhotosManager():
-    def __init__(self, bot, photos_root_path):
+    def __init__(self, bot, db, photos_root_path):
         self.bot = bot
+        self.db = db
         self.photos_root_path = photos_root_path
         self.accepted_cache = set()
         self.pending_cache = {}
@@ -85,7 +88,44 @@ class PhotosManager():
 
     async def initialize(self):
         logging.info("Initializing photos manager...")
-        # Just log what exists
+        logging.info("\tUpdating photo hash index...")
+
+        # TODO: This won't scale well, so revisit in the future
+        #
+        # Current implementation:
+        # Go over each photo path (user dirs to grab user_id, and then all photos in there)
+        # Check to see if the path has a registered hash. If not, migrate the photo.
+        #
+        # Future implementation:
+        # Get a full list of what's in the db, and do set subtraction from glob return
+        count = 0
+        all_photo_paths = glob.glob(os.path.join(self.photos_root_path, '*', '*', '*'))
+        for photo_path in all_photo_paths:
+            _, ext = os.path.splitext(photo_path)
+            album_path, photo_name = os.path.split(photo_path)
+            user_path, album_name = os.path.split(album_path)
+            root_path, user_id = os.path.split(user_path)
+            
+            if await self.db.photo_path_indexed(photo_path):
+                continue
+
+            # Create a new file name that follows convention
+            new_photo_path = os.path.join(album_path, str(time.time_ns()) + ext)
+            logging.info(f'mv {photo_path} {new_photo_path}')
+            shutil.move(photo_path, new_photo_path)
+            
+            # Generate a hash for the file
+            hashobj = hashlib.blake2b()
+            with open(new_photo_path, 'rb') as photo_file:
+                hashobj.update(photo_file.read())
+            photo_hash = hashobj.hexdigest()
+
+            # Register the file with the hash
+            await self.db.add_photo(user_id, album_name, photo_hash, new_photo_path)
+            count += 1
+
+        logging.info(f'\tIndexed {count} unindexed photos.')
+        logging.info('Done.')
         return
 
 
@@ -180,52 +220,105 @@ class PhotosManager():
         elif not message.attachments and not url:
             return await message.channel.send(f'{message.author.mention} - You need to attach either a photo or supply a url to download from')
 
+        # If the file is an attachment, validate it, and move it to the right spot
         if message.attachments:
             attachment = message.attachments[0]
             if not any([attachment.filename.lower().endswith(_) for _ in ACCEPTABLE_FILETYPES]):
+                logging.warning(f'User {message.author.id} uploaded file via attachment - REJECTED: Bad file type')
                 return await message.channel.send(f'{message.author.mention} - The attached file is not a valid photo or archive.')
             
             if attachment.size > 8388608:
+                logging.warning(f'User {message.author.id} uploaded file via attachment - REJECTED: File exceeds maximum allowed size')
                 return await message.channel.send(f'{message.author.mention} - Image files must be less than 8 Megabytes')
             
+            # Uploaded file meets all requirements
             try:
-                await attachment.save(os.path.join(album_path, attachment.filename))
+                # Create a temporary space to download the photo, then do the proper placement
+                with tempfile.TemporaryDirectory() as tmpdirname:
+                    temp_photo_path = os.path.join(tmpdirname, attachment.filename)
+                    await attachment.save(temp_photo_path)
+                    await self._place_photo(temp_photo_path, message.author.id, album_name)
             except Exception:
+                logging.exception(f'Exception thrown while saving file for {message.author.id} to album {album_name}')
                 return await message.channel.send(f'{message.author.mention} - Something went wrong when downloading the file.')
+        
+        # If the URL was supplied, branch into custom logic to download the archive, and handle accordingly
         elif url:
             # https://drive.google.com/file/d/1Ir_MPdJIGviX41Yykc_X8xTA66CQlhSa/view?usp=sharing
             if 'drive.google.com/file/d/' in url:
                 try:
-                    num_added = await asyncio.get_event_loop().run_in_executor(None, extract_from_google_drive, url, album_path)
+                    num_added = await asyncio.get_event_loop().run_in_executor(None, self.extract_from_google_drive, url, album_path)
                     await message.channel.send(f'{message.author.mention} - {str(num_added)} files were added to album `{album_name}`.')
                 except Exception:
+                    logging.exception(f'Exception thrown while downloading from url ({url}) supplied by {message.author.id}')
                     return await message.channel.send(f'{message.author.mention} - Something went wrong with fetching the zip. ' + 
                         'Make sure the zip link is publicly accessible, and the zip has on folders inside.')
+            else:
+                await message.channel.send(f'{message.author.mention} - Photos uploaded from this source are not yet supported.')
+                logging.info(f'User {message.author.id} photo upload from url rejected: not yet supported ({url})')
         
         return await message.add_reaction('✅')
 
 
-def extract_from_google_drive(drive_url, album_path):
-    start = drive_url.find('drive.google.com/file/d/')
-    drive_id = drive_url[start:].split('/')[3]
-    drive_url = f'https://drive.google.com/uc?id={drive_id}'
-    
-    num_files = 0
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        download_path = os.path.join(tmpdirname, 'temp.zip')
-        gdown.download(drive_url, download_path, quiet=True)
-        with zipfile.ZipFile(download_path, "r") as zip_ref:
-            num_files = len(zip_ref.namelist())
-            zip_ref.extractall(album_path)
-        
-        album_files = os.listdir(album_path)
-        for file in album_files:
-            file_path = os.path.join(album_path, file)
-            if not any([file.lower().endswith(_) for _ in ACCEPTABLE_FILETYPES]):
-                logging.info(f'petpic: Removing non-supported file: {file_path}')
-                os.remove(file_path)
-            elif os.path.getsize(file_path) > 8388608:
-                logging.info(f'petpic: Removing large file: {file_path}')
-                os.remove(file_path)
-    return num_files
+    async def _place_photo(self, photo_path, user_id, album_name):
+        # Generate a hash for the file
+        hashobj = hashlib.blake2b()
+        with open(photo_path, 'rb') as photo_file:
+            # This is basically instant for a file of small size
+            hashobj.update(photo_file.read())
 
+        photo_hash = hashobj.hexdigest()
+
+        # Get the path to the corresponding hash (if already in fs)
+        existing_path = await self.db.get_photo_path(user_id, album_name, photo_hash)
+
+        # Delete the old file if there is one, we'll take the new one
+        if existing_path:
+            os.remove(existing_path)
+
+        # Construct a new path to the new version of the file
+        _, ext = os.path.splitext(photo_path)
+        new_photo_path = os.path.join(self.photos_root_path, str(user_id), album_name, str(time.time_ns()) + ext)
+
+        # Move the file to the new path
+        shutil.move(photo_path, new_photo_path)
+
+        logging_prefix = f'PhotoManager: user {user_id} album {album_name} - '
+        if existing_path:
+            logging.info(f'{logging_prefix} Replaced duplicate photo: {existing_path} --> {new_photo_path}')
+        else:
+            logging.info(f'{logging_prefix} New photo added: {new_photo_path}')
+
+        # Register the file with the hash
+        await self.db.add_photo(user_id, album_name, photo_hash, new_photo_path)
+
+    
+
+    def extract_from_google_drive(self, drive_url, album_path):
+        start = drive_url.find('drive.google.com/file/d/')
+        drive_id = drive_url[start:].split('/')[3]
+        drive_url = f'https://drive.google.com/uc?id={drive_id}'
+
+        num_files = 0
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            logging.info(f'Downloading from url {drive_url}')
+            download_path = os.path.join(tmpdirname, 'temp.zip')
+            gdown.download(drive_url, download_path, quiet=True)
+            logging.info(f'Extracting downloaded zip to {tmpdirname}')
+            with zipfile.ZipFile(download_path, "r") as zip_ref:
+                num_files = len(zip_ref.namelist())
+                zip_ref.extractall(tmpdirname)
+            os.remove(download_path)
+
+            extracted_photo_paths = []
+            for ext in ACCEPTABLE_FILETYPES:
+                extracted_photo_paths.extend(glob.glob(os.path.join(tmpdirname, f'*.{ext}')))
+
+            for temp_photo_path in extracted_photo_paths:
+                if os.path.getsize(temp_photo_path) > 8388608:
+                    continue
+                album_name = os.path.basename(album_path)
+                user_id = os.path.basename(os.path.dirname(album_path))
+                asyncio.run(self._place_photo(temp_photo_path, user_id, album_name))
+
+        return num_files
