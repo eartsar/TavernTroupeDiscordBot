@@ -40,10 +40,10 @@ class ReminderManager():
             for channel_id in channel_ids:
                 channel = discord.utils.get(self.bot.get_all_channels(), id=int(channel_id))
                 if not channel:
-                    logging.warning(f"Bot does not have access to channel with ID {channel_id}!")
+                    logging.warning(f"\tBot does not have access to channel with ID {channel_id}!")
                 else:
                     channels.append(channel)
-            logging.info(f"  Watching for events from Google Calendar {calendar_label} with id {calendar_id}...")
+            logging.info(f"\tWatching for events from Google Calendar {calendar_label} with id {calendar_id}...")
             self.tasks.append(asyncio.create_task(self.poll_calendar_events(calendar_id, channels, when_to_notify, ping)))
         logging.info("Done.")
 

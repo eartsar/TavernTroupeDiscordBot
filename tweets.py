@@ -23,14 +23,14 @@ class TweetManager():
         logging.info("Initializing tweet watching...")
         # For each twitter account, create a new async task that will run polling tweets
         for account in self.relay_map.keys():
-            logging.info(f"  Watching @{account}...")
+            logging.info(f"\tWatching @{account}...")
             self.tasks.append(asyncio.create_task(self.poll_tweets(account)))
-        logging.info("Done.")
 
         for destination_channel_id in self.relay_map[account]:
             channel = discord.utils.get(self.bot.get_all_channels(), id=int(destination_channel_id))
             if not channel:
                 logging.warning(f"Bot does not have access to channel with ID {destination_channel_id}!")
+        logging.info("Done.")
 
 
     async def poll_tweets_for_channel(self, account, destination_channel_id):
