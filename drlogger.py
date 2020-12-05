@@ -11,6 +11,20 @@ from telnetlib import Telnet
 import libtmux
 import discord
 
+# Some patterns stolen wholesale from http://drservice.info/static/logcleaner.htm
+SPEECH_REGEX = r'^(You|\w*(\s\(.*\))?)(\s\w*)?\s(say|ask|exclaim)s?(\sto)?(\s\w*(\s\(.*\))?)?, ".*[.!?]"$'
+EMOTE_REGEX = r'^\w*(\'s)? (nods?|gives a courteous|gives a slight|smiles?|frowns?|ponders?|hails?|leans?|\
+clears?|coughs?|chuckles?|laughs?|grins?|tail|just nudged|nudges?|gulps?|stands?|lies?|sits?|gazes?|smirks?|\
+shakes?|casually observes?|trills?|begins chortling|winks?|hugs?|scratch(es)?|squints?|just arrived|blinks?|\
+scowls?|arch|raises?|snaps?|taps?|joins?|flash(es)?|snickers?|waves?|rubs?|stares?|fix(es)?|giggles?|squirms?|\
+shrugs?|twitch(es)?|inhales?|looks? thoughtfully|angles?|knits?|shivers?|takes?|licks?|shifts?|strokes?|applauds?|\
+jots?|folds?|pats?|glances?|gnaws?|winces?|wrinkles?|hiccups?|gets? an odd expression|motions?|fidgets?|ears droop|\
+bows?|curts(y|ies)?|furrows?|praises?|mutters?|slowly empt(y|ies)?|clucks?|shudders?|body jerks|briefly drops?|\
+offers?|beams?|the tip of|rearranges?|touch(es)?|search(es)?|ears?|cocks?|grumbles?|peers?|stud(y|ies) the faces|\
+tightly laces|brotherly hug|dusts (him|her)self|rolls? (your|his|her) eyes|kiss(es)?|paces?|howls?|perks? up|\
+writes? something|opens?|closes?|grunts?|praises?|guzzles?|whispers something to|looks at [a-zA-Z]+ and applauds!|\
+lets out a loud "Huzzah!"|lets? out a hearty cheer|babbles|slaps?|nibbles?|gasps?|covers?|glares?|cringes?|\
+pointedly ignores|sighs?)([.!?, ].*)?$'
 
 
 class DRLoggerManager():
@@ -52,7 +66,7 @@ class DRLoggerManager():
                 try:
                     auth_key = await loop.run_in_executor(None, self.authenticate, self.username, self.password, self.character)
                 except Exception as e:
-                    logger.exception(f'Something went wrong during auth, will try {str(2-i)} more times...')
+                    logging.exception(f'Something went wrong during auth, will try {str(2-i)} more times...')
 
                 if auth_key:
                     break
@@ -61,9 +75,22 @@ class DRLoggerManager():
                 return await channel.send("😿  💬   Uhoh... Something went wrong, and the scribe didn't wake up...")
             await channel.send("😸  💬   I'll tell the troupe scribe that a meeting is starting!")
             
-            log_path = await loop.run_in_executor(None, self.connect_and_run, auth_key)
-            logging.info(f'Uploading {log_path} to channel {self.upload_channel_id}...')
-            with open(log_path) as f:
+            raw_path = await loop.run_in_executor(None, self.connect_and_run, auth_key)
+            cleaned_path = os.path.splitext(raw_path)[0] + '.txt'
+
+            logging.info(f'Cleaning log file {raw_path}...')
+            lines = []
+            with open(raw_path) as f:
+                lines = f.readlines()
+            
+            includes = [_ for _ in lines if re.match(SPEECH_REGEX, _) or re.match(EMOTE_REGEX, _)]
+            # work around to some input oddities with tintin++, cut out first and last line
+            includes = includes[1:-1]
+            with open(cleaned_path, 'w') as f:
+                f.writelines(includes)
+
+            with open(cleaned_path) as f:
+                logging.info(f'Uploading {cleaned_path} to channel {self.upload_channel_id}...')
                 send_file = discord.File(f, filename=f.name, spoiler=False)
                 await channel.send("😸  ✉️   Meeting adjourned! Here's the log!", file=send_file)
             logging.info('File upload completed.')
@@ -163,7 +190,7 @@ class DRLoggerManager():
         pane = window.select_pane(0)
         logging.info('Starting up DragonRealms via tintin++ client and re-attaching...')
 
-        log_name = f"{self.log_prefix}_{time.strftime('%Y%m%d-%H%M%S')}.txt"
+        log_name = f"{self.log_prefix}_{time.strftime('%Y%m%d-%H%M%S')}.raw"
         
         log_path = os.path.join('tt/temp', log_name)
         pane.send_keys('tt++ dr.tin', enter=True)
