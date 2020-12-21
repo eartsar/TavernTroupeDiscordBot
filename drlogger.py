@@ -62,11 +62,13 @@ class DRLoggerManager():
 
             # Runs this in the thread pool because it's a blocking IO task due to telnet connectivity
             loop = asyncio.get_running_loop()
+            auth_key = None
             for i in range(3):
                 try:
                     auth_key = await loop.run_in_executor(None, self.authenticate, self.username, self.password, self.character)
                 except Exception as e:
                     logging.exception(f'Something went wrong during auth, will try {str(2-i)} more times...')
+                    asyncio.sleep(3)
 
                 if auth_key:
                     break
@@ -83,13 +85,13 @@ class DRLoggerManager():
             with open(raw_path) as f:
                 lines = f.readlines()
             
-            includes = [_ for _ in lines if re.match(SPEECH_REGEX, _) or re.match(EMOTE_REGEX, _)]
+            includes = [_.strip() for _ in lines if re.match(SPEECH_REGEX, _) or re.match(EMOTE_REGEX, _)]
             # work around to some input oddities with tintin++, cut out first and last line
             includes = includes[1:-1]
             with open(cleaned_path, 'w') as f:
-                f.writelines(includes)
+                f.write('\r\n'.join(includes))
 
-            with open(cleaned_path) as f:
+            with open(cleaned_path, 'rb') as f:
                 logging.info(f'Uploading {cleaned_path} to channel {self.upload_channel_id}...')
                 send_file = discord.File(f, filename=f.name, spoiler=False)
                 await channel.send("😸  ✉️   Meeting adjourned! Here's the log!", file=send_file)
