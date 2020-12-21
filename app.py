@@ -2,7 +2,7 @@ import argparse
 import re
 import logging
 import asyncio
-import pprint
+import subprocess
 
 import yaml
 import discord
@@ -105,6 +105,7 @@ NICE_REGEX = re.compile(r'!nice')
 JOKE_REGEX = re.compile(r'!joke')
 HELP_REGEX = re.compile(r'!help')
 PETPIC_REGEX = re.compile(r'!petpic (add|create|delete|list|random|remove|upload|wipe)(?: ([^\s\\]+))?(?: (.+))?')
+VERSION_REGEX = re.compile(r'!version')
 
 class TroupeTweetBot(discord.Client):
     def __init__(self):
@@ -190,6 +191,10 @@ class TroupeTweetBot(discord.Client):
                 await self.pics.wipe_albums(message)
             else:
                 await message.channel.send('😾  Not like this! Check `!help` for details on how to use `!petpic`.')
+        elif m.match(VERSION_REGEX):
+            version_content = subprocess.check_output(['git', 'log', '-n3'])
+            await message.channel.send("😸  💬   I'm the best version of myself, just like my dad taught me to be!" + 
+                "\n```" + str(version_content, 'utf-8') + "```")
         elif m.match(HELP_REGEX):
             await message.channel.send(f"😽  Here's what I know how to do (so far)!\n```{HELP_TEXT}```")
 
