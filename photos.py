@@ -10,6 +10,7 @@ import tempfile
 import time
 import hashlib
 import pathlib
+import imghdr
 
 import discord
 import aiofiles
@@ -275,7 +276,8 @@ class PhotosManager():
 
         random_pic = os.path.join(self.photos_root_path, random.choice(all_pics))
         with open(random_pic, 'rb') as f:
-            send_file = discord.File(f, filename=f.name, spoiler=False)
+            ext = imghdr.what(random_pic)
+            send_file = discord.File(f, filename=f.name + '.' + ext, spoiler=False)
             return await message.channel.send(
                 f"Here's a random photo{' from album `' + album_name + '`!' if album_name else '! Who is it...?'}", file=send_file)
 
@@ -301,10 +303,7 @@ class PhotosManager():
         # If the file is an attachment, validate it, and move it to the right spot
         if message.attachments:
             attachment = message.attachments[0]
-            if not any([attachment.filename.lower().endswith(_) for _ in ACCEPTABLE_FILETYPES]):
-                logging.warning(f'User {message.author.id} uploaded file via attachment - REJECTED: Bad file type')
-                return await message.channel.send(f'{message.author.mention} - The attached file is not a valid photo or archive.')
-            
+
             if attachment.size > MAX_PHOTO_SIZE:
                 logging.warning(f'User {message.author.id} uploaded file via attachment - REJECTED: File exceeds maximum allowed size')
                 return await message.channel.send(f'{message.author.mention} - Image files must be less than 8 Megabytes')
@@ -315,6 +314,11 @@ class PhotosManager():
                 with tempfile.TemporaryDirectory() as temp_dir:
                     temp_photo_path = os.path.join(temp_dir, attachment.filename)
                     await attachment.save(temp_photo_path)
+
+                    if imghdr.what(temp_photo_path) not in ACCEPTABLE_FILETYPES:
+                        logging.warning(f'User {message.author.id} uploaded file via attachment - REJECTED: Bad file type')
+                        return await message.channel.send(f'{message.author.mention} - The attached file is not a valid photo or archive.')
+
                     await self._place_photo(temp_photo_path, message.author.id, album_name)
             except Exception:
                 logging.exception(f'Exception thrown while saving file for {message.author.id} to album {album_name}')
@@ -393,12 +397,19 @@ from **Google Drive** and **Dropbox**, but I'll try any link you give me!")
 
             os.remove(download_path)
 
-            extracted_photo_paths = []
-            for ext in ACCEPTABLE_FILETYPES:
-                extracted_photo_paths.extend(pathlib.Path(temp_dir).rglob(f'*.{ext}'))
+            def is_ok(img):
+                if os.path.basename(img)[0] == '.':
+                    return False
+                if os.path.isdir(img):
+                    return False
+                if os.path.getsize(img) > MAX_PHOTO_SIZE:
+                    return False
+                if imghdr.what(img) not in ACCEPTABLE_FILETYPES:
+                    return False
+                return True
 
-            # Cut out files of that are too big, and hidden files
-            sanitized_photo_paths = [_ for _ in extracted_photo_paths if os.path.getsize(_) < MAX_PHOTO_SIZE and os.path.basename(_)[0] != '.']
+            # Cut out files of that are too big, and hidden files, and non-image types
+            sanitized_photo_paths = [_ for _ in filter(is_ok, glob.glob(os.path.join(temp_dir, '*')))]
             for temp_photo_path in sanitized_photo_paths:
                 asyncio.run(self._place_photo(temp_photo_path, user_id, album_name))
 
