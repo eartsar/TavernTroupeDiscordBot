@@ -70,6 +70,7 @@ HELP_TEXT = '''\
 -----------------------
 !ping                           Test command to ensure the bot is healthy.
 !help                           Displays this message.
+!version                        Displays recent changes.
 
      FUN FUNCTIONS
 -----------------------
@@ -86,9 +87,10 @@ HELP_TEXT = '''\
                                     If name is supplied, show a random pic of that pet.
 !petpic list                    Shows a list of your albums
 !petpic list all                Shows a list of everyone's albums
-!petpic create <name>           Create a new album for a pet.
-!petpic delete <name>           Delete a pet album (and all associated pictures).
-!petpic wipe                    Delete ALL your pet pictures (asks confirmation).
+!petpic create <name>           Create a new album for a pet
+!petpic share <name>            Make an album public. You will lose ownership. THIS CANNOT BE UNDONE!
+!petpic delete <name>           Delete a pet album (does not delete files on system)
+!petpic wipe                    Delete ALL your pet pictures and albums. THIS CANNOT BE UNDONE!
 
    HELPFUL FUNCTIONS
 -----------------------

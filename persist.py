@@ -8,7 +8,7 @@ class DatabaseManager():
     
 
     async def initialize(self):
-        async with aiosqlite.connect(self.  dbpath) as db:
+        async with aiosqlite.connect(self.dbpath) as db:
             logging.info("Connecting to and preparing SQLITE database...")
             await db.execute('CREATE TABLE IF NOT EXISTS CACHED_TWEETS (tweet_id varchar(255), channel_id varchar(255), UNIQUE(tweet_id, channel_id))')
             await db.execute('CREATE TABLE IF NOT EXISTS ALBUMS (album_name varchar(255), creator varchar(255), UNIQUE(album_name))')
