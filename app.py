@@ -104,7 +104,7 @@ DRLOGGER_REGEX = re.compile(r'!log (start|stop)')
 NICE_REGEX = re.compile(r'!nice')
 JOKE_REGEX = re.compile(r'!joke')
 HELP_REGEX = re.compile(r'!help')
-PETPIC_REGEX = re.compile(r'!petpic (add|create|delete|list|random|remove|upload|wipe)(?: ([^\s\\]+))?(?: (.+))?')
+PETPIC_REGEX = re.compile(r'!petpic (add|create|delete|list|random|remove|upload|wipe|share)(?: ([^\s\\]+))?(?: (.+))?')
 VERSION_REGEX = re.compile(r'!version')
 
 class TroupeTweetBot(discord.Client):
@@ -188,7 +188,9 @@ class TroupeTweetBot(discord.Client):
             elif cmd in ('delete', 'remove') and album_name:
                 await self.pics.delete_album(message, album_name)
             elif cmd == 'wipe':
-                await self.pics.wipe_albums(message)
+                await self.pics.wipe(message)
+            elif cmd == 'share' and album_name:
+                await self.pics.share_album(message, album_name)
             else:
                 await message.channel.send('😾  Not like this! Check `!help` for details on how to use `!petpic`.')
         elif m.match(VERSION_REGEX):
