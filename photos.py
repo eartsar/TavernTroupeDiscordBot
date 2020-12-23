@@ -52,6 +52,8 @@ do not hesitate to reach out to Discord user eartsar#3210 - my creator.```'''
 
 ACCEPTABLE_FILETYPES = ('jpg', 'jpeg', 'gif', 'png', 'tiff')
 
+MAX_PHOTO_SIZE = 8388608
+
 
 def requires_disclaimer(fn):
     '''
@@ -85,7 +87,6 @@ def requires_disclaimer(fn):
     return wrapper
 
 
-
 class PhotosManager():
     def __init__(self, bot, db, photos_root_path):
         self.bot = bot
@@ -109,45 +110,36 @@ class PhotosManager():
         Indexes all unindexed photos.
         '''
         logging.info("Initializing photos manager...")
-        logging.info("\tUpdating photo hash index...")
-
-        # TODO: This won't scale well, so revisit in the future
-        #
-        # Current implementation:
-        # Go over each photo path (user dirs to grab user_id, and then all photos in there)
-        # Check to see if the path has a registered hash. If not, migrate the photo.
-        #
-        # Future implementation:
-        # Get a full list of what's in the db, and do set subtraction from glob return
-        count = 0
-        all_photo_paths = glob.glob(os.path.join(self.photos_root_path, '*', '*', '*'))
-        for photo_path in all_photo_paths:
-            _, ext = os.path.splitext(photo_path)
-            album_path, photo_name = os.path.split(photo_path)
-            user_path, album_name = os.path.split(album_path)
-            root_path, user_id = os.path.split(user_path)
-            
-            if await self.db.photo_path_indexed(photo_path):
-                continue
-
-            # Create a new file name that follows convention
-            new_photo_path = os.path.join(album_path, str(time.time_ns()) + ext)
-            logging.info(f'mv {photo_path} {new_photo_path}')
-            shutil.move(photo_path, new_photo_path)
-            
-            # Generate a hash for the file
-            hashobj = hashlib.blake2b()
-            with open(new_photo_path, 'rb') as photo_file:
-                hashobj.update(photo_file.read())
-            photo_hash = hashobj.hexdigest()
-
-            # Register the file with the hash
-            await self.db.add_photo(user_id, album_name, photo_hash, new_photo_path)
-            count += 1
-
-        logging.info(f'\tIndexed {count} unindexed photos.')
+        await self.update_index()
         logging.info('Done.')
         return
+
+
+    async def update_index(self):
+        logging.info("Updating photo hash index...")
+
+        all_photo_paths = set([os.path.basename(_) for _ in glob.glob(os.path.join(self.photos_root_path, '*'))])
+        all_indexed_photos = set(await self.db.get_photos())
+
+        to_remove_from_disk = all_photo_paths - all_indexed_photos
+        to_prune_from_db = all_indexed_photos - all_photo_paths
+
+        def delete_files(paths):
+            count = 0
+            for path in paths:
+                try:
+                    os.remove(os.path.join(self.photos_root_path, path))
+                    count += 1
+                except OSError:
+                    pass
+            return count
+
+        # Purge photos uploaded by user from disk
+        num_files_deleted = await asyncio.get_event_loop().run_in_executor(None, delete_files, to_remove_from_disk)
+        logging.info(f'Removed {num_files_deleted} unindexed files from disk.')
+
+        num_entries_purged = await self.db.delete_photos(to_prune_from_db)
+        logging.info(f'Removed {num_entries_purged} lingering index entries from the DB.')
 
 
     async def reaction_handler(self, user, reaction):
@@ -173,14 +165,18 @@ class PhotosManager():
             await reaction.remove(user)
 
 
-    @requires_disclaimer
+    # @requires_disclaimer
     async def create_album(self, message, album_name):
         '''
         Create an album by creating a dir on disk
         photo_root/{user_id}/{album_name}
         '''
-        album_path = os.path.join(self.photos_root_path, str(message.author.id), album_name)
-        os.makedirs(album_path, exist_ok=True)
+        from sqlite3 import IntegrityError
+        try:
+            await self.db.create_album(album_name, message.author.id)
+        except IntegrityError:
+            logging.warning(f'{message.author.id} attempted to create album {album_name} which already exists.')
+            return await message.channel.send(f'{message.author.mention} - There is already an album named `{album_name}`.')
         return await message.channel.send(f'{message.author.mention} - Created album `{album_name}`.')
 
 
@@ -188,49 +184,81 @@ class PhotosManager():
         '''
         Delete an album on disk and all its contents
         '''
-        album_path = os.path.join(self.photos_root_path, str(message.author.id), album_name)
-        if not os.path.exists(album_path):
-            return await message.channel.send(f'{message.author.mention} - You don\'t have an album named `{album_name}`.')
-        await asyncio.get_event_loop().run_in_executor(None, shutil.rmtree, album_path)
+        if not await self.db.user_owns_album(album_name, message.author.id):
+            return await message.channel.send(f"{message.author.mention} - You don't have an album named `{album_name}`.")
+        
+        await self.db.delete_album(album_name)
         return await message.channel.send(f'{message.author.mention} - Deleted album `{album_name}`.')
 
 
-    async def wipe_albums(self, message):
+    async def wipe(self, message):
         '''
         Delete all of a user's albums and contents
         '''
-        user_path = os.path.join(self.photos_root_path, str(message.author.id))
-        if not os.path.exists(user_path):
-            return await message.channel.send(f'{message.author.mention} - you don\'t have any albums!')
-        await asyncio.get_event_loop().run_in_executor(None, shutil.rmtree, os.path.join(self.photos_root_path, str(message.author.id)))
-        return await message.channel.send(f'{message.author.mention} - Wiped all your albums.')
+        paths = [os.path.join(self.photos_root_path, _) for _ in await self.db.get_photos(uploader=message.author.id)]
+
+        def delete_files(paths):
+            count = 0
+            for path in paths:
+                try:
+                    os.remove(path)
+                    count += 1
+                except OSError:
+                    pass
+            return count
+
+        # Purge photos uploaded by user from disk
+        num_files_deleted = await asyncio.get_event_loop().run_in_executor(None, delete_files, paths)
+        logging.info(f"Wiping {str(message.author.id)}'s petpic data...")
+        logging.info(f'  {num_files_deleted} files deleted from disk.')
+        
+        # Remove entities from the DB
+        albums_to_remove = await self.db.get_albums(creator=message.author.id)
+        num_albums_removed = await self.db.wipe_user_albums(message.author.id)
+        logging.info(f'  Albums removed from DB: {", ".join(sorted(albums_to_remove))}')
+        
+        num_photos_removed = await self.db.wipe_user_photos(message.author.id)
+        logging.info(f'  {num_photos_removed} photos removed from DB.')
+
+        return await message.channel.send(f'{message.author.mention} - All your uploaded photos and albums have been deleted.')
+
+
+    async def share_album(self, message, album_name):
+        '''
+        Share an album so that it can be used by everyone
+        '''
+        if not await self.db.album_exists(album_name):
+            return await message.channel.send(f"{message.author.mention} - There is no album named `{album_name}`.")
+        if not await self.db.user_owns_album(album_name, message.author.id):
+            return await message.channel.send(f"{message.author.mention} - You don't own the album `{album_name}`.")
+
+        await self.db.make_album_public(album_name) 
+        return await message.channel.send(f'{message.author.mention} - Album {album_name} is now open to everyone.')
 
 
     async def list_albums(self, message, all_albums=False):
         '''
         Get a list of all albums for a user, or all albums in general
         '''
-        albums = []
-        if all_albums:
-            albums = glob.glob(os.path.join(self.photos_root_path, '*', '*'))
-            if not albums:
-                return await message.channel.send(f'{message.author.mention} - there aren\'t any albums! Make the first one!')
-        else:
-            albums = glob.glob(os.path.join(self.photos_root_path, str(message.author.id), '*'))
-            if not albums:
-                return await message.channel.send(f'{message.author.mention} - you don\'t have any albums!')
-        
-        albums = sorted([os.path.basename(os.path.normpath(_.lower())) for _ in albums])
-        albums_with_sizes = {}
-        for album in albums:
-            files = []
+        albums = await self.db.get_albums(creator=(message.author.id if not all_albums else None))
+        if not albums:
             if all_albums:
-                files = glob.glob(os.path.join(self.photos_root_path, '*', album, '*'))
+                return await message.channel.send(f"{message.author.mention} - there aren't any albums! Make the first one!")
             else:
-                files = glob.glob(os.path.join(self.photos_root_path, str(message.author.id), album, '*'))
-            albums_with_sizes[album] = len(files)
-        newline = '\n'
-        album_listing = '\n'.join([f'{album} - {albums_with_sizes[album]} photos.' for album in albums])
+                return await message.channel.send(f"{message.author.mention} - you don't have any albums!")
+        
+        albums = sorted(albums)
+        metadata = {}
+        for album in albums:
+            metadata[album] = await self.db.get_album_metadata(album)
+        
+        lines = []
+        for album in albums:
+            marker = "* " if metadata[album]['public'] else "  "
+            count = metadata[album]['count']
+            lines.append(f'{marker}{album} - {count} photos.')
+        
+        album_listing = '\n'.join(lines) + '\n\n* this is a public album'
         return await message.channel.send(f'{message.author.mention} - I found the following albums:```\n{album_listing}```')
 
 
@@ -238,19 +266,21 @@ class PhotosManager():
         '''
         Fetches a random photo and posts it
         '''
-        all_pics = glob.glob(os.path.join(self.photos_root_path, '*', album_name if album_name else '*', '*'))
-        if album_name and not all_pics:
-            return await message.channel.send(f'I couldn\'t find any photos for album `{album_name}` - did you spell it correctly?')
-        elif not all_pics:
-            return await message.channel.send(f'I couldn\'t find any photos!')
-        random_pic = random.choice(all_pics)
+        if album_name and not await self.db.album_exists(album_name):
+            return await message.channel.send(f'{message.author.mention} - There is no album named `{album_name}`.')
+        
+        all_pics = await self.db.get_photos(album_name=album_name)
+        if not all_pics:
+            return await message.channel.send(f"I couldn't find any photos!")
+
+        random_pic = os.path.join(self.photos_root_path, random.choice(all_pics))
         with open(random_pic, 'rb') as f:
             send_file = discord.File(f, filename=f.name, spoiler=False)
             return await message.channel.send(
-                f'Here\'s a random photo{" from album `" + album_name + "`!" if album_name else "! Who is it...?"}', file=send_file)
+                f"Here's a random photo{' from album `' + album_name + '`!' if album_name else '! Who is it...?'}", file=send_file)
 
 
-    @requires_disclaimer
+    # @requires_disclaimer
     async def upload(self, message, album_name, url):
         '''
         Adds photos to storage.
@@ -261,9 +291,10 @@ class PhotosManager():
         if not album_name:
             return await message.channel.send(f'{message.author.mention} - You need to tell me which album to add to.')
 
-        album_path = os.path.join(self.photos_root_path, str(message.author.id), album_name)
-        if not os.path.exists(album_path):
-            return await message.channel.send(f'{message.author.mention} - You don\'t have an album named `{album_name}`.')
+        if not await self.db.album_exists(album_name):
+            return await message.channel.send(f'{message.author.mention} - There is no album named `{album_name}`.')
+        elif not await self.db.user_owns_album(album_name, message.author.id) and not await self.db.is_album_public(album_name):
+            return await message.channel.send(f"{message.author.mention} - You don't have access to the album `{album_name}`.")
         elif not message.attachments and not url:
             return await message.channel.send(f'{message.author.mention} - You need to attach either a photo or supply a url to download from')
 
@@ -274,10 +305,10 @@ class PhotosManager():
                 logging.warning(f'User {message.author.id} uploaded file via attachment - REJECTED: Bad file type')
                 return await message.channel.send(f'{message.author.mention} - The attached file is not a valid photo or archive.')
             
-            if attachment.size > 8388608:
+            if attachment.size > MAX_PHOTO_SIZE:
                 logging.warning(f'User {message.author.id} uploaded file via attachment - REJECTED: File exceeds maximum allowed size')
                 return await message.channel.send(f'{message.author.mention} - Image files must be less than 8 Megabytes')
-            
+
             # Uploaded file meets all requirements
             try:
                 # Create a temporary space to download the photo, then do the proper placement
@@ -292,19 +323,23 @@ class PhotosManager():
         # If the URL was supplied, branch into custom logic to download the archive, and handle accordingly
         elif url:
             try:
-                num_added = await asyncio.get_event_loop().run_in_executor(None, self.download_and_extract, url, album_path)
+                num_added = await asyncio.get_event_loop().run_in_executor(None, self.download_and_extract, url, message.author.id, album_name)
                 await message.channel.send(f'{message.author.mention} - {str(num_added)} files were added to album `{album_name}`.')        
             except Exception:
                 logging.exception(f'Exception thrown while downloading from url ({url}) supplied by {message.author.id}')
-                return await message.channel.send(f'{message.author.mention} - Something went wrong with fetching the zip. ' + 
-                    'Many cloud services have a landing page on publicly accessible files that I can\'t deal with. ' + 
-                    'Right now I know how to download from **Google Drive** and **Dropbox**, but I\'ll try any link you give me!')
+                return await message.channel.send(f"{message.author.mention} - Something went wrong with fetching the zip. \
+Many cloud services have a landing page on publicly accessible files that I can't deal with yet. Right now I know how to download \
+from **Google Drive** and **Dropbox**, but I'll try any link you give me!")
 
         return await message.add_reaction('✅')
 
 
     async def _place_photo(self, photo_path, user_id, album_name):
-        # Generate a hash for the file
+        '''
+        Hash photo, move it, and register to DB
+        '''
+        
+        # Generate a hash for the file, which is also the name on disk
         hashobj = hashlib.blake2b()
         with open(photo_path, 'rb') as photo_file:
             # This is basically instant for a file of small size
@@ -312,34 +347,20 @@ class PhotosManager():
 
         photo_hash = hashobj.hexdigest()
 
-        # Get the path to the corresponding hash (if already in fs)
-        existing_path = await self.db.get_photo_path(user_id, album_name, photo_hash)
+        # Move the file to the proper location on disk
+        new_photo_path = os.path.join(self.photos_root_path, photo_hash)
+        overwrite = os.path.exists(new_photo_path)
+        
+        try:
+            shutil.move(photo_path, new_photo_path)
+        except Exception:
+            logging.exception(f'Could not mv {photo_path} --> {new_photo_path}.')
 
-        # Delete the old file if there is one, we'll take the new one
-        replaced_existing = False
-        if existing_path and os.path.exists(existing_path):
-            replaced_existing = True
-            os.remove(existing_path)
-
-        # Construct a new path to the new version of the file
-        _, ext = os.path.splitext(photo_path)
-        new_photo_path = os.path.join(self.photos_root_path, str(user_id), album_name, str(time.time_ns()) + ext)
-
-        # Move the file to the new path
-        shutil.move(photo_path, new_photo_path)
-
-        logging_prefix = f'PhotoManager: user {user_id} album {album_name} - '
-        if replaced_existing:
-            logging.info(f'{logging_prefix} Replaced duplicate photo: {existing_path} --> {new_photo_path}')
-        else:
-            logging.info(f'{logging_prefix} New photo added: {new_photo_path}')
-
-        # Register the file with the hash
-        await self.db.add_photo(user_id, album_name, photo_hash, new_photo_path)
+        await self.db.add_photo(photo_hash, album_name, user_id, silently=True)
+        logging.info(f"PhotoManager: user {user_id} {'overwrote' if overwrite else 'added'} photo {new_photo_path} to album {album_name}")
 
     
-
-    def download_and_extract(self, url, album_path):
+    def download_and_extract(self, url, user_id, album_name):
         '''
         NOT AN ASYNC METHOD - MUST RUN IN A THREAD
         '''
@@ -376,10 +397,10 @@ class PhotosManager():
             for ext in ACCEPTABLE_FILETYPES:
                 extracted_photo_paths.extend(pathlib.Path(temp_dir).rglob(f'*.{ext}'))
 
-            sanitized_photo_paths = [_ for _ in extracted_photo_paths if os.path.getsize(_) < 8388608]
+            # Cut out files of that are too big, and hidden files
+            sanitized_photo_paths = [_ for _ in extracted_photo_paths if os.path.getsize(_) < MAX_PHOTO_SIZE and os.path.basename(_)[0] != '.']
             for temp_photo_path in sanitized_photo_paths:
-                album_name = os.path.basename(album_path)
-                user_id = os.path.basename(os.path.dirname(album_path))
                 asyncio.run(self._place_photo(temp_photo_path, user_id, album_name))
 
         return len(sanitized_photo_paths)
+
