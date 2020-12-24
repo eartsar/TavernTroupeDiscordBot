@@ -1,6 +1,7 @@
 import aiosqlite
 import logging
 
+from photos import Photo, Album
 
 class DatabaseManager():
     def __init__(self, sqlite3_file):
@@ -63,6 +64,8 @@ class DatabaseManager():
 
     async def get_albums(self, album_name=None, creator=None):
         async with aiosqlite.connect(self.dbpath) as db:
+            db.row_factory = aiosqlite.Row
+
             query = "SELECT * FROM ALBUMS"
             
             criteria = []
@@ -76,7 +79,7 @@ class DatabaseManager():
 
             query += (' WHERE ' + ' AND '.join(criteria)) if criteria else ''
             async with db.execute(query, tuple(args)) as cursor:
-                return [_[0] for _ in await cursor.fetchall()]
+                return [Album(**row) for row in await cursor.fetchall()]
 
 
     async def album_exists(self, album_name, creator=None):
@@ -98,10 +101,6 @@ class DatabaseManager():
                 return cursor.rowcount == 1
 
 
-    async def get_album_metadata(self, album_name):
-        return {'public': await self.is_album_public(album_name), 'count': len(await self.get_photos(album_name=album_name))}
-
-
     async def add_photo(self, photo_name, album_name, uploader, silently=False):
         async with aiosqlite.connect(self.dbpath) as db:
             async with db.execute(f"\
@@ -120,6 +119,8 @@ class DatabaseManager():
 
     async def get_photos(self, uploader=None, album_name=None):
         async with aiosqlite.connect(self.dbpath) as db:
+            db.row_factory = aiosqlite.Row
+
             query = 'SELECT * FROM PHOTOS'
             
             criteria = []
@@ -134,7 +135,7 @@ class DatabaseManager():
             query += (' WHERE ' + ' AND '.join(criteria)) if criteria else ''
 
             async with db.execute(query, tuple(args)) as cursor:
-                return [_[0] for _ in await cursor.fetchall()]
+                return [Photo(**row) for row in await cursor.fetchall()]
 
 
     async def delete_photos(self, filenames):

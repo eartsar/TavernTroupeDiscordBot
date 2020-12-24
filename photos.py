@@ -11,11 +11,25 @@ import time
 import hashlib
 import pathlib
 import imghdr
+import dataclasses
 
 import discord
 import aiofiles
 import gdown
 import requests
+
+
+@dataclasses.dataclass
+class Photo:
+    photo_name: str
+    album_name: str
+    uploader: int
+
+
+@dataclasses.dataclass
+class Album:
+    album_name: str
+    creator: int
 
 
 DISCLAIMER_MESSAGE = '''\
@@ -120,7 +134,7 @@ class PhotosManager():
         logging.info("Updating photo hash index...")
 
         all_photo_paths = set([os.path.basename(_) for _ in glob.glob(os.path.join(self.photos_root_path, '*'))])
-        all_indexed_photos = set(await self.db.get_photos())
+        all_indexed_photos = set([_.photo_name for _ in await self.db.get_photos()])
 
         to_remove_from_disk = all_photo_paths - all_indexed_photos
         to_prune_from_db = all_indexed_photos - all_photo_paths
@@ -166,7 +180,7 @@ class PhotosManager():
             await reaction.remove(user)
 
 
-    # @requires_disclaimer
+    @requires_disclaimer
     async def create_album(self, message, album_name):
         '''
         Create an album by creating a dir on disk
@@ -196,7 +210,7 @@ class PhotosManager():
         '''
         Delete all of a user's albums and contents
         '''
-        paths = [os.path.join(self.photos_root_path, _) for _ in await self.db.get_photos(uploader=message.author.id)]
+        paths = [os.path.join(self.photos_root_path, _.photo_name) for _ in await self.db.get_photos(uploader=message.author.id)]
 
         def delete_files(paths):
             count = 0
@@ -214,7 +228,7 @@ class PhotosManager():
         logging.info(f'  {num_files_deleted} files deleted from disk.')
         
         # Remove entities from the DB
-        albums_to_remove = await self.db.get_albums(creator=message.author.id)
+        albums_to_remove = [_.album_name for _ in await self.db.get_albums(creator=message.author.id)]
         num_albums_removed = await self.db.wipe_user_albums(message.author.id)
         logging.info(f'  Albums removed from DB: {", ".join(sorted(albums_to_remove))}')
         
@@ -224,6 +238,7 @@ class PhotosManager():
         return await message.channel.send(f'{message.author.mention} - All your uploaded photos and albums have been deleted.')
 
 
+    @requires_disclaimer
     async def share_album(self, message, album_name):
         '''
         Share an album so that it can be used by everyone
@@ -248,16 +263,13 @@ class PhotosManager():
             else:
                 return await message.channel.send(f"{message.author.mention} - you don't have any albums!")
         
-        albums = sorted(albums)
-        metadata = {}
-        for album in albums:
-            metadata[album] = await self.db.get_album_metadata(album)
+        albums = sorted(albums, key=lambda x: x.album_name)
         
         lines = []
         for album in albums:
-            marker = "* " if metadata[album]['public'] else "  "
-            count = metadata[album]['count']
-            lines.append(f'{marker}{album} - {count} photos.')
+            marker = "* " if album.creator == 'public' else "  "
+            count = len(await self.db.get_photos(album_name=album.album_name))
+            lines.append(f'{marker}{album.album_name} - {count} photos.')
         
         album_listing = '\n'.join(lines) + '\n\n* this is a public album'
         return await message.channel.send(f'{message.author.mention} - I found the following albums:```\n{album_listing}```')
@@ -270,19 +282,19 @@ class PhotosManager():
         if album_name and not await self.db.album_exists(album_name):
             return await message.channel.send(f'{message.author.mention} - There is no album named `{album_name}`.')
         
-        all_pics = await self.db.get_photos(album_name=album_name)
-        if not all_pics:
+        all_photos = await self.db.get_photos(album_name=album_name)
+        if not all_photos:
             return await message.channel.send(f"I couldn't find any photos!")
 
-        random_pic = os.path.join(self.photos_root_path, random.choice(all_pics))
-        with open(random_pic, 'rb') as f:
-            ext = imghdr.what(random_pic)
+        random_photo = random.choice(all_photos)
+        random_photo_path = os.path.join(self.photos_root_path, random_photo.photo_name)
+        with open(random_photo_path, 'rb') as f:
+            ext = imghdr.what(random_photo_path)
             send_file = discord.File(f, filename=f.name + '.' + ext, spoiler=False)
-            return await message.channel.send(
-                f"Here's a random photo{' from album `' + album_name + '`!' if album_name else '! Who is it...?'}", file=send_file)
+            return await message.channel.send(f"Here's a random photo from the album `{random_photo.album_name}`!", file=send_file)
 
 
-    # @requires_disclaimer
+    @requires_disclaimer
     async def upload(self, message, album_name, url):
         '''
         Adds photos to storage.
