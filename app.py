@@ -68,9 +68,9 @@ SIGNATURE_EMOJI = '<:wafflebot:780940516140515359>'
 HELP_TEXT = '''\
  BOT UTILITY FUNCTIONS
 -----------------------
-!ping                           Test command to ensure the bot is healthy.
-!help                           Displays this message.
-!version                        Displays recent changes.
+!ping                           Test command to ensure the bot is healthy
+!help                           Displays this message
+!version [history]              Displays recent changes
 
      FUN FUNCTIONS
 -----------------------
@@ -79,23 +79,20 @@ HELP_TEXT = '''\
 
    PETPIC FUNCTIONS
 -----------------------
-!petpic upload <name> [url]     Upload a picture to a pet album. This must be the comment on a file upload to the bot.
-                                    Files can be singular images of any type, or .zip archives.
-                                If url is supplied, the bot will attempt to download from it.
-                                Currently, direct links to zips, or share links from Google Drive and Dropbox work.
-!petpic random [name]           Show a random pet picture.
-                                    If name is supplied, show a random pic of that pet.
-!petpic list                    Shows a list of your albums
-!petpic list all                Shows a list of everyone's albums
-!petpic create <name>           Create a new album for a pet
-!petpic share <name>            Make an album public. You will lose ownership. THIS CANNOT BE UNDONE!
-!petpic delete <name>           Delete a pet album (does not delete files on system)
-!petpic wipe                    Delete ALL your pet pictures and albums. THIS CANNOT BE UNDONE!
+!petpic upload <album> [url]    Upload a picture to a pet album. This must be the comment on a file upload to the bot
+                                    url - must be a public link to a zip on Google Drive or Dropbox or wget-able file
+!petpic random [album]          Show a random pet picture
+!petpic list [all]              Shows a list of your albums, or everyone's albums
+!petpic create [name]           Create a new album for a pet
+
+                                THE COMMANDS BELOW CANNOT BE UNDONE!
+!petpic share [name]            Give up ownership and make an album public
+!petpic delete [name]           Delete an album (does NOT delete files on server)
+!petpic wipe                    Delete ALL your petpic stuff from server database and disk
 
    HELPFUL FUNCTIONS
 -----------------------
 !events <calendar_name>         Pull up the events for the named calendar for this month and next month.
-                                Keep calendar_name blank to get a list of calendars the bot knows of.
 !log <start|stop>               Tells the troupe scribe to start or stop their note-taking (requires permission).'''
 
 
@@ -107,7 +104,7 @@ NICE_REGEX = re.compile(r'!nice')
 JOKE_REGEX = re.compile(r'!joke')
 HELP_REGEX = re.compile(r'!help')
 PETPIC_REGEX = re.compile(r'!petpic (add|create|delete|list|random|remove|upload|wipe|share)(?: ([^\s\\]+))?(?: (.+))?')
-VERSION_REGEX = re.compile(r'!version')
+VERSION_REGEX = re.compile(r'!version(?: (.+))?')
 
 class TroupeTweetBot(discord.Client):
     def __init__(self):
@@ -196,7 +193,8 @@ class TroupeTweetBot(discord.Client):
             else:
                 await message.channel.send('😾  Not like this! Check `!help` for details on how to use `!petpic`.')
         elif m.match(VERSION_REGEX):
-            version_content = subprocess.check_output(['git', 'log', '-n3'])
+            num_commits = 5 if m.group(1) else 1
+            version_content = subprocess.check_output(['git', 'log', '--use-mailmap', f'-n{num_commits}'])
             await message.channel.send("😸  💬   I'm the best version of myself, just like my dad taught me to be!" + 
                 "\n```" + str(version_content, 'utf-8') + "```")
         elif m.match(HELP_REGEX):
