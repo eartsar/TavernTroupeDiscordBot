@@ -12,6 +12,8 @@ import hashlib
 import pathlib
 import imghdr
 import dataclasses
+import subprocess
+import math
 
 import discord
 import aiofiles
@@ -24,6 +26,7 @@ class Photo:
     photo_name: str
     album_name: str
     uploader: int
+    freq: int
 
 
 @dataclasses.dataclass
@@ -286,12 +289,38 @@ class PhotosManager():
         if not all_photos:
             return await message.channel.send(f"I couldn't find any photos!")
 
-        random_photo = random.choice(all_photos)
+        # Calculate weights. This heuristic adds one to the freq of all photos (to avoid zero), creates an inverse weight, and
+        # then normalizes the weights for all photos.
+        for photo in all_photos:
+            photo.freq += 1
+
+        weights = [1/photo.freq for photo in all_photos]
+        total_weight = sum(weights)
+        weights = [_/total_weight for _ in weights]
+
+        # Bin the weights for display, and decimal shift them to make spark happy
+        spark_weights = sorted([_ * 100000 for _ in weights])
+        chunk = 100
+        if len(spark_weights) > chunk:
+            factor = math.ceil(len(spark_weights) / chunk)
+            # spark_weights = spark_weights[:factor*chunk]
+            bins = []
+            for i in range(0, len(spark_weights), factor):
+                bins.append(sum(spark_weights[i:i+factor])/factor)
+            spark_weights = bins
+        # stringify for subprocess
+        spark_weights = [str(_) for _ in reversed(spark_weights)]
+        cmd = 'spark ' + ' '.join(spark_weights)
+        logging.info('petpic bias: ' + subprocess.check_output(cmd, shell=True).decode('utf-8'))
+
+        random_photo = random.choices(all_photos, weights=weights)[0]
         random_photo_path = os.path.join(self.photos_root_path, random_photo.photo_name)
         with open(random_photo_path, 'rb') as f:
             ext = imghdr.what(random_photo_path)
             send_file = discord.File(f, filename=f.name + '.' + ext, spoiler=False)
-            return await message.channel.send(f"Here's a random photo from the album `{random_photo.album_name}`!", file=send_file)
+            await message.channel.send(f"Here's a random photo from the album `{random_photo.album_name}`!", file=send_file)
+        
+        return await self.db.increment_photo_freq(random_photo)
 
 
     @requires_disclaimer

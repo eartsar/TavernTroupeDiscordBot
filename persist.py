@@ -13,7 +13,7 @@ class DatabaseManager():
             logging.info("Connecting to and preparing SQLITE database...")
             await db.execute('CREATE TABLE IF NOT EXISTS CACHED_TWEETS (tweet_id varchar(255), channel_id varchar(255), UNIQUE(tweet_id, channel_id))')
             await db.execute('CREATE TABLE IF NOT EXISTS ALBUMS (album_name varchar(255), creator varchar(255), UNIQUE(album_name))')
-            await db.execute('CREATE TABLE IF NOT EXISTS PHOTOS (photo_name varchar(255), album_name varchar(255), uploader varchar(255), UNIQUE(photo_name, album_name))')
+            await db.execute('CREATE TABLE IF NOT EXISTS PHOTOS (photo_name varchar(255), album_name varchar(255), uploader varchar(255), freq int DEFAULT 0, UNIQUE(photo_name, album_name))')
             logging.info("Done.")
 
 
@@ -143,6 +143,14 @@ class DatabaseManager():
             async with db.execute(f"DELETE FROM PHOTOS WHERE photo_name IN ({','.join(['?']*len(filenames))})", tuple(filenames)) as cursor:
                 await db.commit()
                 return cursor.rowcount
+
+
+    async def increment_photo_freq(self, photo):
+        async with aiosqlite.connect(self.dbpath) as db:
+            async with db.execute("UPDATE PHOTOS SET freq = freq + 1 WHERE photo_name = ? and album_name = ?",
+                (photo.photo_name, photo.album_name)) as cursor:
+                await db.commit()
+                return cursor.rowcount == 1
 
 
     
