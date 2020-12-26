@@ -66,7 +66,7 @@ SIGNATURE_EMOJI = '<:wafflebot:780940516140515359>'
 
 
 HELP_TEXT = '''\
- BOT UTILITY FUNCTIONS
+   UTILITY FUNCTIONS
 -----------------------
 !ping                           Test command to ensure the bot is healthy
 !help                           Displays this message
