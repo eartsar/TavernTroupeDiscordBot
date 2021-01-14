@@ -41,13 +41,24 @@ class TweetManager():
             params = {'query': f'from:{account}'}
 
             waking_up = tweet_cache_key not in self.last_seen_tweet_cache
-            if not waking_up:
+            if not waking_up and self.last_seen_tweet_cache[tweet_cache_key]:
                 params['since_id'] = self.last_seen_tweet_cache[tweet_cache_key]
 
 
             r = requests.get(TWITTER_API_RECENT_ENDPOINT, params=params, headers=header)
             content = r.content.decode('utf-8')
             d = json.loads(content)
+
+            # If the since_id was invalid (over a week old) remove the param, and re-do the request
+            if not waking_up and 'errors' in d and d['errors']:
+            	for error in d['errors']:
+            		if 'since_id' in error['parameters'] and self.last_seen_tweet_cache[tweet_cache_key] in error['parameters']['since_id']:
+            			del params['since_id']
+            			self.last_seen_tweet_cache[tweet_cache_key] = None
+            			r = requests.get(TWITTER_API_RECENT_ENDPOINT, params=params, headers=header)
+            			content = r.content.decode('utf-8')
+            			d = json.loads(content)
+            			break
             
             tweets = []
             if d['meta']['result_count'] > 0:
