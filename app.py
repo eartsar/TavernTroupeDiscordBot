@@ -62,6 +62,7 @@ DRLOG_AUTHORIZED_USER_IDS = config['log_authorized_users'] if DRLOGGER_ENABLED e
 DRLOG_UPLOAD_CHANNEL_ID = config['log_upload_channel'] if DRLOGGER_ENABLED else None
 DRLOG_FILENAME_PREFIX = config['log_filename_prefix'] if DRLOGGER_ENABLED else None
 
+NAUGHTY_CHANNEL_IDS = config['naughty_channels'] if FUN_ENABLED and 'naughty_channels' in config and config['naughty_channels'] else []
 
 SIGNATURE_EMOJI = '<:wafflebot:780940516140515359>'
 
@@ -78,6 +79,7 @@ HELP_TEXT = '''\
 !nice                           Having a rough day? I'll say something nice...
 !joke                           ...Or tell you a joke...
 !riddle                         ...Or maybe even ask you a riddle!
+!roast                          When Pistol lies, do this 🤏, and fig me like the bragging Spaniard!
 
    PETPIC FUNCTIONS
 -----------------------
@@ -105,6 +107,7 @@ DRLOGGER_REGEX = re.compile(r'!log (start|stop)')
 NICE_REGEX = re.compile(r'!nice')
 JOKE_REGEX = re.compile(r'!joke')
 RIDDLE_REGEX = re.compile(r'!riddle')
+ROAST_REGEX = re.compile(r'!roast')
 HELP_REGEX = re.compile(r'!help')
 PETPIC_REGEX = re.compile(r'!petpic (add|create|delete|list|random|remove|upload|wipe|share)(?: ([^\s\\]+))?(?: (.+))?')
 VERSION_REGEX = re.compile(r'!version(?: (.+))?')
@@ -116,7 +119,7 @@ class TroupeTweetBot(discord.Client):
         self.reminders = ReminderManager(self, GOOGLE_CAL_CREDS, REMINDER_RELAY_MAP)
         self.drlogger = DRLoggerManager(self, DR_ACCOUNT_INFO, DRLOG_UPLOAD_CHANNEL_ID, DRLOG_FILENAME_PREFIX)
         self.pics = PhotosManager(self, self.db, PETPIC_ROOT_PATH)
-        self.fun = FunManager(self)
+        self.fun = FunManager(self, NAUGHTY_CHANNEL_IDS)
         super().__init__()
 
 
@@ -175,6 +178,8 @@ class TroupeTweetBot(discord.Client):
             await self.fun.joke(message)
         elif m.match(RIDDLE_REGEX) and FUN_ENABLED:
             await self.fun.riddle(message)
+        elif m.match(ROAST_REGEX) and FUN_ENABLED:
+            await self.fun.roast(message)
         elif m.match(PETPIC_REGEX) and PETPIC_ENABLED:
             cmd = m.group(1)
             album_name = m.group(2).lower() if m.group(2) else None
