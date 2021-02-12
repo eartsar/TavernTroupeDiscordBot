@@ -58,6 +58,7 @@ class ReminderManager():
         # This cache is local to only this running coroutine
         # We only want to notify an event for a particular "minutes until event" trigger one time
         cache = {}
+        logging.info('Spawned a poll watcher. Trump would be proud.')
         for look_ahead in when_to_notify:
             cache[look_ahead] = set()
 
@@ -128,6 +129,9 @@ class ReminderManager():
             # Construct the message for the notification.
             msg = f"{prompt}\n"
             for future_event in to_notify:
+                if future_event['id'] in cache:
+                    continue
+
                 cache.add(future_event['id'])
                 event_as_str = await self._render_event(future_event)
                 msg += f'```{event_as_str}```' + "\n"

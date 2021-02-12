@@ -13,6 +13,7 @@ from tweets import TweetManager
 from reminders import ReminderManager
 from drlogger import DRLoggerManager
 from photos import PhotosManager
+from fun import FunManager
 
 
 from util import ValueRetainingRegexMatcher
@@ -74,8 +75,9 @@ HELP_TEXT = '''\
 
      FUN FUNCTIONS
 -----------------------
-!nice                           Having a rough day? I'll say something nice!
-!joke                           ...Or tell you a joke!
+!nice                           Having a rough day? I'll say something nice...
+!joke                           ...Or tell you a joke...
+!riddle                         ...Or maybe even ask you a riddle!
 
    PETPIC FUNCTIONS
 -----------------------
@@ -102,6 +104,7 @@ CALENDAR_REGEX = re.compile(r'!events(?: (.+))')
 DRLOGGER_REGEX = re.compile(r'!log (start|stop)')
 NICE_REGEX = re.compile(r'!nice')
 JOKE_REGEX = re.compile(r'!joke')
+RIDDLE_REGEX = re.compile(r'!riddle')
 HELP_REGEX = re.compile(r'!help')
 PETPIC_REGEX = re.compile(r'!petpic (add|create|delete|list|random|remove|upload|wipe|share)(?: ([^\s\\]+))?(?: (.+))?')
 VERSION_REGEX = re.compile(r'!version(?: (.+))?')
@@ -113,6 +116,7 @@ class TroupeTweetBot(discord.Client):
         self.reminders = ReminderManager(self, GOOGLE_CAL_CREDS, REMINDER_RELAY_MAP)
         self.drlogger = DRLoggerManager(self, DR_ACCOUNT_INFO, DRLOG_UPLOAD_CHANNEL_ID, DRLOG_FILENAME_PREFIX)
         self.pics = PhotosManager(self, self.db, PETPIC_ROOT_PATH)
+        self.fun = FunManager(self)
         super().__init__()
 
 
@@ -166,11 +170,11 @@ class TroupeTweetBot(discord.Client):
             else:
                 await message.channel.send('😾  You can start or stop logging with `!log <start|stop>`.')
         elif m.match(NICE_REGEX) and FUN_ENABLED:
-            compliment = requests.get('https://complimentr.com/api').json()['compliment']
-            await message.channel.send(f"{SIGNATURE_EMOJI} {compliment}")
+            await self.fun.compliment(message)
         elif m.match(JOKE_REGEX) and FUN_ENABLED:
-            joke = requests.get('https://official-joke-api.appspot.com/jokes/random').json()
-            await message.channel.send(f"{SIGNATURE_EMOJI} {joke['setup']}\n    ...{joke['punchline']}")
+            await self.fun.joke(message)
+        elif m.match(RIDDLE_REGEX) and FUN_ENABLED:
+            await self.fun.riddle(message)
         elif m.match(PETPIC_REGEX) and PETPIC_ENABLED:
             cmd = m.group(1)
             album_name = m.group(2).lower() if m.group(2) else None
