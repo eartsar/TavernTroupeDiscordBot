@@ -19,3 +19,4 @@ class ValueRetainingRegexMatcher:
 
     def group(self, i):
         return self.retained.group(i)
+

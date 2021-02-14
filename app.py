@@ -14,6 +14,7 @@ from reminders import ReminderManager
 from drlogger import DRLoggerManager
 from photos import PhotosManager
 from fun import FunManager
+from music import MusicManager
 
 
 from util import ValueRetainingRegexMatcher
@@ -48,6 +49,7 @@ TWITTER_ENABLED = config['enable_twitter']
 PETPIC_ENABLED = config['enable_petpic']
 FUN_ENABLED = config['enable_fun']
 DRLOGGER_ENABLED = config['enable_drlogger']
+MUSIC_ENABLED = config['enable_music']
 
 TWITTER_BEARER_TOKEN = config['twitter_bearer_token'] if TWITTER_ENABLED else None
 TWITTER_RELAY_MAP = config['twitter_relay_map'] if TWITTER_ENABLED else None
@@ -63,6 +65,10 @@ DRLOG_UPLOAD_CHANNEL_ID = config['log_upload_channel'] if DRLOGGER_ENABLED else 
 DRLOG_FILENAME_PREFIX = config['log_filename_prefix'] if DRLOGGER_ENABLED else None
 
 NAUGHTY_CHANNEL_IDS = config['naughty_channels'] if FUN_ENABLED and 'naughty_channels' in config and config['naughty_channels'] else []
+
+MUSIC_TEXT_CHANNEL_ID = config['music_text_channel'] if MUSIC_ENABLED else None
+MUSIC_VOICE_CHANNEL_ID = config['music_voice_channel'] if MUSIC_ENABLED else None
+
 
 SIGNATURE_EMOJI = '<:wafflebot:780940516140515359>'
 
@@ -80,6 +86,11 @@ HELP_TEXT = '''\
 !joke                           ...Or tell you a joke...
 !riddle                         ...Or maybe even ask you a riddle!
 !roast                          When Pistol lies, do this 🤏, and fig me like the bragging Spaniard!
+
+    MUSIC FUNCTIONS
+-----------------------
+!music play <url>               URLs MUST be youtube urls!
+!music stop
 
    PETPIC FUNCTIONS
 -----------------------
@@ -109,6 +120,7 @@ JOKE_REGEX = re.compile(r'!joke')
 RIDDLE_REGEX = re.compile(r'!riddle')
 ROAST_REGEX = re.compile(r'!roast')
 HELP_REGEX = re.compile(r'!help')
+MUSIC_REGEX = re.compile(r'!music (play|stop)(?: (.+youtube.+))?')
 PETPIC_REGEX = re.compile(r'!petpic (add|create|delete|list|random|remove|upload|wipe|share)(?: ([^\s\\]+))?(?: (.+))?')
 VERSION_REGEX = re.compile(r'!version(?: (.+))?')
 
@@ -120,6 +132,7 @@ class TroupeTweetBot(discord.Client):
         self.drlogger = DRLoggerManager(self, DR_ACCOUNT_INFO, DRLOG_UPLOAD_CHANNEL_ID, DRLOG_FILENAME_PREFIX)
         self.pics = PhotosManager(self, self.db, PETPIC_ROOT_PATH)
         self.fun = FunManager(self, NAUGHTY_CHANNEL_IDS)
+        self.music = MusicManager(self, MUSIC_TEXT_CHANNEL_ID, MUSIC_VOICE_CHANNEL_ID)
         super().__init__()
 
 
@@ -206,6 +219,13 @@ class TroupeTweetBot(discord.Client):
             version_content = subprocess.check_output(['git', 'log', '--use-mailmap', f'-n{num_commits}'])
             await message.channel.send("😸  💬   I'm the best version of myself, just like my dad taught me to be!" + 
                 "\n```" + str(version_content, 'utf-8') + "```")
+        elif m.match(MUSIC_REGEX) and MUSIC_ENABLED:
+            command = m.group(1)
+            url = m.group(2)
+            if command == 'play' and url:
+                await self.music.play(message, url)    
+            elif command == 'stop':
+                await self.music.stop(message)
         elif m.match(HELP_REGEX):
             await message.channel.send(f"😽  Here's what I know how to do (so far)!\n```{HELP_TEXT}```")
 
