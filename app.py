@@ -15,7 +15,7 @@ from drlogger import DRLoggerManager
 from photos import PhotosManager
 from fun import FunManager
 from music import MusicManager
-
+from idea import IdeaManager
 
 from util import ValueRetainingRegexMatcher
 
@@ -50,6 +50,7 @@ PETPIC_ENABLED = config['enable_petpic']
 FUN_ENABLED = config['enable_fun']
 DRLOGGER_ENABLED = config['enable_drlogger']
 MUSIC_ENABLED = config['enable_music']
+IDEA_ENABLED = config['enable_idea']
 
 TWITTER_BEARER_TOKEN = config['twitter_bearer_token'] if TWITTER_ENABLED else None
 TWITTER_RELAY_MAP = config['twitter_relay_map'] if TWITTER_ENABLED else None
@@ -69,6 +70,9 @@ NAUGHTY_CHANNEL_IDS = config['naughty_channels'] if FUN_ENABLED and 'naughty_cha
 MUSIC_TEXT_CHANNEL_ID = config['music_text_channel'] if MUSIC_ENABLED else None
 MUSIC_VOICE_CHANNEL_ID = config['music_voice_channel'] if MUSIC_ENABLED else None
 
+GITHUB_TOKEN = config['github_token'] if IDEA_ENABLED else None
+MAINTAINER_ID = config['maintainer_id'] if IDEA_ENABLED else None
+
 
 SIGNATURE_EMOJI = '<:wafflebot:780940516140515359>'
 
@@ -76,38 +80,40 @@ SIGNATURE_EMOJI = '<:wafflebot:780940516140515359>'
 HELP_TEXT = '''\
  BOT UTILITY FUNCTIONS
 -----------------------
-!ping                           Test command to ensure the bot is healthy
+!ping                           Checks if online
 !help                           Displays this message
-!version [history]              Displays recent changes
+!version [history]
+!idea <description>             Submit an idea for the bot's maintainer to implement.
 
      FUN FUNCTIONS
 -----------------------
-!nice                           Having a rough day? I'll say something nice...
-!joke                           ...Or tell you a joke...
-!riddle                         ...Or maybe even ask you a riddle!
+!nice                           Wafflebot compliments you.
+!joke                             or makes you laugh
+!riddle                           or confounds you
 !roast                          When Pistol lies, do this 🤏, and fig me like the bragging Spaniard!
 
     MUSIC FUNCTIONS
 -----------------------
-!music play <url>               URLs MUST be youtube urls!
+!music play <url>               Play youtube url in the voice channel
 !music stop
 
    PETPIC FUNCTIONS
 -----------------------
-!petpic upload <album> [url]    Upload a picture to a pet album. This must be the comment on a file upload to the bot
-                                    url - must be a public link to a zip on Google Drive or Dropbox or wget-able file
-!petpic random [album]          Show a random pet picture
-!petpic list [all]              Shows a list of your albums, or everyone's albums
-!petpic create [name]           Create a new album for a pet
+!petpic upload <album> [url]    Upload a picture to an album. This must be the comment on a picture uploaded!
+                                  url - a public url to a zip on Google Drive or Dropbox
+
+!petpic random [album]
+!petpic list [all]              List albums
+!petpic create [name]           Create a new album
 
                                 THE COMMANDS BELOW CANNOT BE UNDONE!
 !petpic share [name]            Give up ownership and make an album public
 !petpic delete [name]           Delete an album (does NOT delete files on server)
-!petpic wipe                    Delete ALL your petpic stuff from server database and disk
+!petpic wipe                    Delete ALL data and files you uplaoded
 
-   HELPFUL FUNCTIONS
+    OTHER FUNCTIONS
 -----------------------
-!events <calendar_name>         Pull up the events for the named calendar for this month and next month.
+!events <calendar_name>         Show upcoming events for a calendar
 !log <start|stop>               Tells the troupe scribe to start or stop their note-taking (requires permission).'''
 
 
@@ -123,9 +129,10 @@ HELP_REGEX = re.compile(r'!help')
 MUSIC_REGEX = re.compile(r'!music (play|stop)(?: (.+youtube.+))?')
 PETPIC_REGEX = re.compile(r'!petpic (add|create|delete|list|random|remove|upload|wipe|share)(?: ([^\s\\]+))?(?: (.+))?')
 VERSION_REGEX = re.compile(r'!version(?: (.+))?')
+IDEA_REGEX = re.compile(r'!idea (.+)')
 
 class TroupeTweetBot(discord.Client):
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.db = DatabaseManager(DB_FILE_PATH)
         self.tweets = TweetManager(self, self.db, TWITTER_BEARER_TOKEN, TWITTER_RELAY_MAP)
         self.reminders = ReminderManager(self, GOOGLE_CAL_CREDS, REMINDER_RELAY_MAP)
@@ -133,7 +140,8 @@ class TroupeTweetBot(discord.Client):
         self.pics = PhotosManager(self, self.db, PETPIC_ROOT_PATH)
         self.fun = FunManager(self, NAUGHTY_CHANNEL_IDS)
         self.music = MusicManager(self, MUSIC_TEXT_CHANNEL_ID, MUSIC_VOICE_CHANNEL_ID)
-        super().__init__()
+        self.idea = IdeaManager(self, GITHUB_TOKEN, MAINTAINER_ID)
+        super().__init__(**kwargs)
 
 
     async def on_ready(self):
@@ -152,9 +160,10 @@ class TroupeTweetBot(discord.Client):
         if user == self.user:
             return
         
-        # If the reaction was to a "roll build" comment, and the reactor is the owner of it...
+        # If the reaction was to a bot message, call the various handlers
         if reaction.message.author.id == self.user.id:
             await self.pics.reaction_handler(user, reaction)
+            await self.idea.reaction_handler(user, reaction)
 
 
     async def on_message(self, message):
@@ -226,13 +235,18 @@ class TroupeTweetBot(discord.Client):
                 await self.music.play(message, url)    
             elif command == 'stop':
                 await self.music.stop(message)
+        elif m.match(IDEA_REGEX):
+            await self.idea.submit(message, m.group(1))
         elif m.match(HELP_REGEX):
             await message.channel.send(f"😽  Here's what I know how to do (so far)!\n```{HELP_TEXT}```")
 
 
 
 def main():
-    client = TroupeTweetBot()
+    intents = discord.Intents.default()
+    intents.members = True
+    
+    client = TroupeTweetBot(intents=intents)
     client.run(BOT_TOKEN)
 
 
