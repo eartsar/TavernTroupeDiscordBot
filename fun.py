@@ -33,7 +33,7 @@ class FunManager():
 
     async def roast(self, message):
         if not isinstance(message.channel, discord.channel.DMChannel) and message.channel.id not in self.naughty_channels:
-            return await message.channel.send(f"{message.author.mention}, behave yourself!")
+            return await message.channel.send(f"{message.author.mention}, I most forsooth wilt not! Keepeth this tush tush in #not-safe-for-fenlyn!")
     
         from app import SIGNATURE_EMOJI
         r = requests.get('https://fungenerators.com/random/insult/shakespeare/')

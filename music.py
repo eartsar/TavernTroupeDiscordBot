@@ -1,10 +1,11 @@
 import discord
-import pytube
+import youtube_dl
 import asyncio
 import shutil
 
 
 DISALLOW_MESSAGE = 'these commands are only usable in #music-channel'
+SONG_FILENAME = '.song.mp4'
 
 
 class MusicManager():
@@ -15,23 +16,23 @@ class MusicManager():
 
 
     def _download(self, url):
-        return pytube.YouTube(url).streams.first().download()
+        ydl_opts = {'format': 'mp4', 'outtmpl': SONG_FILENAME, 'nooverwrites': False}
+        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
 
 
     async def play(self, message, url):
         if message.channel.id != self.music_text_channel_id:
             return await message.channel.send(f'{message.author.mention}, {DISALLOW_MESSAGE}')
 
-        downloaded_name = await asyncio.get_event_loop().run_in_executor(None, self._download, url)
-        temp_name = '.song.mp4'
-        shutil.move(downloaded_name, temp_name)
+        await asyncio.get_event_loop().run_in_executor(None, self._download, url)
 
         channel = discord.utils.find(lambda channel: channel.id == self.music_voice_channel_id, message.guild.voice_channels)
         await channel.connect()
 
         voice = discord.utils.get(self.bot.voice_clients, guild=message.guild)
         if not voice.is_playing():
-            voice.play(discord.FFmpegPCMAudio(temp_name))
+            voice.play(discord.FFmpegPCMAudio(SONG_FILENAME))
             voice.is_playing()
             await message.reply(f"Now playing your song request!")
         else:
