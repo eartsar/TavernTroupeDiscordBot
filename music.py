@@ -2,7 +2,7 @@ import discord
 import youtube_dl
 import asyncio
 import shutil
-
+import os
 
 DISALLOW_MESSAGE = 'these commands are only usable in #music-channel'
 SONG_FILENAME = '.song.mp4'
@@ -31,8 +31,17 @@ class MusicManager():
         await channel.connect()
 
         voice = discord.utils.get(self.bot.voice_clients, guild=message.guild)
+
+        def finish_playing(error):
+            coro = voice.disconnect()
+            asyncio.run_coroutine_threadsafe(coro, self.bot.loop)
+            try:
+                os.remove(SONG_FILENAME)
+            except:
+                pass
+
         if not voice.is_playing():
-            voice.play(discord.FFmpegPCMAudio(SONG_FILENAME))
+            voice.play(discord.FFmpegPCMAudio(SONG_FILENAME), after=finish_playing)
             voice.is_playing()
             await message.reply(f"Now playing your song request!")
         else:
@@ -46,10 +55,12 @@ class MusicManager():
             return await message.channel.send(f'{message.author.mention}, {DISALLOW_MESSAGE}')
 
         voice = discord.utils.get(self.bot.voice_clients, guild=message.guild)
-        if voice.is_playing():
+        if voice.is_playing() or voice.is_connected():
+            try:
+                os.remove(SONG_FILENAME)
+            except Exception:
+                pass
+
             return await voice.disconnect()
         else:
             await message.channel.send("No song is playing!")
-
-
-
