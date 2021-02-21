@@ -126,7 +126,7 @@ JOKE_REGEX = re.compile(r'!joke')
 RIDDLE_REGEX = re.compile(r'!riddle')
 ROAST_REGEX = re.compile(r'!roast')
 HELP_REGEX = re.compile(r'!help')
-MUSIC_REGEX = re.compile(r'!music (play|stop)(?: (.+youtube.+))?')
+MUSIC_REGEX = re.compile(r'!music (play|stop|queue|skip|peek|list)(?: (.+youtube.+))?')
 PETPIC_REGEX = re.compile(r'!petpic (add|create|delete|list|random|remove|upload|wipe|share)(?: ([^\s\\]+))?(?: (.+))?')
 VERSION_REGEX = re.compile(r'!version(?: (.+))?')
 IDEA_REGEX = re.compile(r'!idea (.+)')
@@ -235,6 +235,8 @@ class TroupeTweetBot(discord.Client):
                 await self.music.play(message, url)    
             elif command == 'stop':
                 await self.music.stop(message)
+            elif command in ('list', 'queue', 'peek'):
+                await self.music.peek(message)
         elif m.match(IDEA_REGEX):
             await self.idea.submit(message, m.group(1))
         elif m.match(HELP_REGEX):
