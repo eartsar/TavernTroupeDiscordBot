@@ -141,18 +141,21 @@ class TroupeTweetBot(discord.Client):
         self.fun = FunManager(self, NAUGHTY_CHANNEL_IDS)
         self.music = MusicManager(self, MUSIC_TEXT_CHANNEL_ID, MUSIC_VOICE_CHANNEL_ID)
         self.idea = IdeaManager(self, GITHUB_TOKEN, MAINTAINER_ID)
+        self.initialized = False
         super().__init__(**kwargs)
 
 
     async def on_ready(self):
-        logging.info("TroupeBot initializing...")
-        await self.db.initialize()
-        if TWITTER_ENABLED:
-            await self.tweets.initialize()
-        if CALENDAR_ENABLED:
-            await self.reminders.initialize()
-        if PETPIC_ENABLED:
-            await self.pics.initialize()
+        if not self.initialized:
+            logging.info("TroupeBot initializing...")
+            await self.db.initialize()
+            if TWITTER_ENABLED:
+                await self.tweets.initialize()
+            if CALENDAR_ENABLED:
+                await self.reminders.initialize()
+            if PETPIC_ENABLED:
+                await self.pics.initialize()
+            self.initialized = True
 
 
     async def on_reaction_add(self, reaction, user):
