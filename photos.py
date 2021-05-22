@@ -70,7 +70,7 @@ do not hesitate to reach out to Discord user eartsar#3210 - my creator.```'''
 
 ACCEPTABLE_FILETYPES = ('jpg', 'jpeg', 'gif', 'png', 'tiff')
 
-MAX_PHOTO_SIZE = 8388608
+MAX_PHOTO_SIZE = 25165824
 
 
 def requires_disclaimer(fn):
@@ -347,7 +347,7 @@ class PhotosManager():
 
             if attachment.size > MAX_PHOTO_SIZE:
                 logging.warning(f'User {message.author.id} uploaded file via attachment - REJECTED: File exceeds maximum allowed size')
-                return await message.channel.send(f'{message.author.mention} - Image files must be less than 8 Megabytes')
+                return await message.channel.send(f'{message.author.mention} - Image files must be less than 24 Megabytes')
 
             # Uploaded file meets all requirements
             try:
