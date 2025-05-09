@@ -3,6 +3,7 @@ import re
 import logging
 import asyncio
 import subprocess
+import socket
 
 import yaml
 import discord
@@ -195,6 +196,10 @@ class TroupeTweetBot(discord.Client):
         # Match against the right command, grab args, and go
         m = ValueRetainingRegexMatcher(message.content)
 
+        # Handle ping separately, no matter the instance
+        if m.match(PING_REGEX):
+            return await message.channel.send(f'{message.author.mention} {socket.gethostname()} ({"non-" if not DRLOGGER_ENABLED else ""}logger)": pong!')
+
         # DRLOGGER instances only handle DRLOGGER commands
         if DRLOGGER_ENABLED and m.match(DRLOGGER_REGEX):
             cmd = m.group(1) if m.group(1) else None
@@ -208,15 +213,15 @@ class TroupeTweetBot(discord.Client):
                 await message.channel.send('😾  You can start or stop logging with `!log <start|stop>`.')
             
             return
+        elif DRLOGGER_ENABLED:
+            return
         
         # non-DRLOGGER instances do nothing for DRLOGGER commands
         if not DRLOGGER_ENABLED and m.match(DRLOGGER_REGEX):
             return
 
         # Process other commands
-        if m.match(PING_REGEX):
-            await message.channel.send(f'{message.author.mention} pong!')
-        elif m.match(CALENDAR_REGEX) and CALENDAR_ENABLED:
+        if m.match(CALENDAR_REGEX) and CALENDAR_ENABLED:
             name = m.group(1) if m.group(1) else None
             await self.reminders.get_upcoming_events(message.channel, calendar_name=name)
         elif m.match(DRLOGGER_REGEX) and DRLOGGER_ENABLED:
