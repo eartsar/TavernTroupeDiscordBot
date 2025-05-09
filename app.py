@@ -48,9 +48,18 @@ CALENDAR_ENABLED = config['enable_calendar']
 TWITTER_ENABLED = config['enable_twitter']
 PETPIC_ENABLED = config['enable_petpic']
 FUN_ENABLED = config['enable_fun']
-DRLOGGER_ENABLED = config['enable_drlogger']
 MUSIC_ENABLED = config['enable_music']
 IDEA_ENABLED = config['enable_idea']
+DRLOGGER_ENABLED = config['enable_drlogger']
+
+# If in-game logging is enabled, disable everything else.
+if DRLOGGER_ENABLED:
+    CALENDAR_ENABLED = False
+    TWITTER_ENABLED = False
+    PETPIC_ENABLED = False
+    FUN_ENABLED = False
+    MUSIC_ENABLED = False
+    IDEA_ENABLED = False
 
 TWITTER_BEARER_TOKEN = config['twitter_bearer_token'] if TWITTER_ENABLED else None
 TWITTER_RELAY_MAP = config['twitter_relay_map'] if TWITTER_ENABLED else None
@@ -148,7 +157,8 @@ class TroupeTweetBot(discord.Client):
     async def on_ready(self):
         if not self.initialized:
             logging.info("TroupeBot initializing...")
-            await self.db.initialize()
+            if not DRLOGGER_ENABLED:
+                await self.db.initialize()
             if TWITTER_ENABLED:
                 await self.tweets.initialize()
             if CALENDAR_ENABLED:
@@ -159,6 +169,10 @@ class TroupeTweetBot(discord.Client):
 
 
     async def on_reaction_add(self, reaction, user):
+        # Logging instances don't respond to reactions
+        if DRLOGGER_ENABLED:
+            return
+
         # If the reaction was from this bot, ignore it
         if user == self.user:
             return
@@ -181,22 +195,32 @@ class TroupeTweetBot(discord.Client):
         # Match against the right command, grab args, and go
         m = ValueRetainingRegexMatcher(message.content)
 
-        # Process a command
-        if m.match(PING_REGEX):
-            await message.channel.send(f'{message.author.mention} pong!')
-        elif m.match(CALENDAR_REGEX) and CALENDAR_ENABLED:
-            name = m.group(1) if m.group(1) else None
-            await self.reminders.get_upcoming_events(message.channel, calendar_name=name)
-        elif m.match(DRLOGGER_REGEX) and DRLOGGER_ENABLED:
+        # DRLOGGER instances only handle DRLOGGER commands
+        if DRLOGGER_ENABLED and m.match(DRLOGGER_REGEX):
             cmd = m.group(1) if m.group(1) else None
             if message.author.id not in DRLOG_AUTHORIZED_USER_IDS:
-                return await message.channel.send('😾  You aren\'t allowed to do this! You\'ll have to ask the speakers to do this!')
+                await message.channel.send('😾  You aren\'t allowed to do this! You\'ll have to ask the speakers to do this!')
             elif cmd == 'start':
                 await self.drlogger.start(message.channel)
             elif cmd == 'stop':
                 await self.drlogger.stop(message.channel)
             else:
                 await message.channel.send('😾  You can start or stop logging with `!log <start|stop>`.')
+            
+            return
+        
+        # non-DRLOGGER instances do nothing for DRLOGGER commands
+        if not DRLOGGER_ENABLED and m.match(DRLOGGER_REGEX):
+            return
+
+        # Process other commands
+        if m.match(PING_REGEX):
+            await message.channel.send(f'{message.author.mention} pong!')
+        elif m.match(CALENDAR_REGEX) and CALENDAR_ENABLED:
+            name = m.group(1) if m.group(1) else None
+            await self.reminders.get_upcoming_events(message.channel, calendar_name=name)
+        elif m.match(DRLOGGER_REGEX) and DRLOGGER_ENABLED:
+            await message.channel.send('😾  You can start or stop logging with `!log <start|stop>`.')
         elif m.match(NICE_REGEX) and FUN_ENABLED:
             await self.fun.compliment(message)
         elif m.match(JOKE_REGEX) and FUN_ENABLED:
