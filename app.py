@@ -7,6 +7,7 @@ import socket
 import yaml
 import discord
 import requests
+import pathlib
 
 from persist import DatabaseManager
 from tweets import TweetManager
@@ -149,7 +150,7 @@ class TroupeTweetBot(discord.Client):
         self.db = DatabaseManager(DB_FILE_PATH)
         self.tweets = TweetManager(self, self.db, TWITTER_BEARER_TOKEN, TWITTER_RELAY_MAP)
         self.reminders = ReminderManager(self, GOOGLE_CAL_CREDS, REMINDER_RELAY_MAP)
-        self.drlogger = DRLoggerManager(self, DR_ACCOUNT_INFO, DRLOG_UPLOAD_CHANNEL_ID, DRLOG_FILENAME_PREFIX)
+        self.drlogger = DRLoggerManager(self, DR_ACCOUNT_INFO, DRLOG_UPLOAD_CHANNEL_ID, DRLOG_FILENAME_PREFIX, GEMINI_KEY)
         self.pics = PhotosManager(self, self.db, PETPIC_ROOT_PATH)
         self.fun = FunManager(self, NAUGHTY_CHANNEL_IDS)
         self.music = MusicManager(self, MUSIC_TEXT_CHANNEL_ID, MUSIC_VOICE_CHANNEL_ID)
@@ -202,6 +203,19 @@ class TroupeTweetBot(discord.Client):
         # Handle ping separately, no matter the instance
         if m.match(PING_REGEX):
             return await message.channel.send(f'{message.author.mention} {socket.gethostname()} ({"non-" if not DRLOGGER_ENABLED else ""}logger)": pong!')
+
+        
+        if m.match(SUMMARIZE_REGEX):
+            logging.info("in sum")
+            if message.reference:
+                logging.info("in ref")
+                attachment = message.reference.resolved.attachments[0]
+                client = genai.Client(api_key=GEMINI_KEY)
+                gemini_payload = await attachment.read()
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash-preview-05-20",
+                    contents=[gemini_payload, 'This is a log for a Tavern Troupe meeting. Summarize what happened in under 1900 characters, formatted for a discord message using a couple of cat-flavored emojis and perhaps a suggestion of cat puns. Finally, give a cute, overly enthusiastic shout-out to one of the members in attendance. Make the shout-out stress how that member is CLEARLY the most important member of the troupe, and  somehow include a reference to the content of the meeting.'])
+                return await message.channel.send(response.text)
 
         # DRLOGGER instances only handle DRLOGGER commands
         if DRLOGGER_ENABLED and m.match(DRLOGGER_REGEX):
@@ -276,14 +290,6 @@ class TroupeTweetBot(discord.Client):
             await self.idea.submit(message, m.group(1))
         elif m.match(HELP_REGEX):
             await message.channel.send(f"😽  Here's what I know how to do (so far)!\n```{HELP_TEXT}```")
-        elif m.match(SUMMARIZE_REGEX):
-            if message.reference:
-                attachment = message.reference.attachments[0]
-                gemini_payload = await attachment.read()
-                client = genai.Client(api_key=GEMINI_KEY)
-                response = client.models.generate_content(
-                    model="gemini-2.5-flash-preview-05-20",
-                    contents=[gemini_payload, 'This is a log for a Tavern Troupe meeting. Summarize what happened.'])
 
 
 
