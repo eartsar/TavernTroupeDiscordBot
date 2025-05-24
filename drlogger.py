@@ -10,6 +10,8 @@ from telnetlib import Telnet
 
 import libtmux
 import discord
+from google import genai
+from google.genai import types
 
 # Some patterns stolen wholesale from http://drservice.info/static/logcleaner.htm
 SPEECH_REGEX = r'^(You|\w*(\s\(.*\))?)(\s\w*)?\s(say|ask|exclaim)s?(\sto)?(\s\w*(\s\(.*\))?)?, ".*[.!?]"$'
@@ -28,7 +30,7 @@ pointedly ignores|sighs?)([.!?, ].*)?$'
 
 
 class DRLoggerManager():
-    def __init__(self, bot, credentials, upload_channel_id, log_prefix):
+    def __init__(self, bot, credentials, upload_channel_id, log_prefix, gemini_key):
         self.bot = bot
         self.username = credentials['username'] if credentials else None
         self.password = credentials['password'] if credentials else None
@@ -37,6 +39,7 @@ class DRLoggerManager():
         self.log_prefix = log_prefix
         self.running = False
         self.startup_lock = asyncio.Lock()
+        self.gemini_key = gemini_key
 
 
     async def start(self, channel):
@@ -91,10 +94,19 @@ class DRLoggerManager():
             with open(cleaned_path, 'w') as f:
                 f.write('\r\n'.join(includes))
 
+            
+            gemini_payload = ""
             with open(cleaned_path, 'rb') as f:
+                gemini_payload = f.read()
+                f.seek(0)
+                client = genai.Client(api_key=self.gemini_key)
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash-preview-05-20",
+                    contents=[gemini_payload, 'This is a log for a Tavern Troupe meeting. Summarize what happened in under 1900 characters, formatted for a discord message using a couple of cat-flavored emojis and perhaps a suggestion of cat puns. Finally, give a cute, overly enthusiastic shout-out to one of the members in attendance. Make the shout-out stress how that member is CLEARLY the most important member of the troupe, and  somehow include a reference to the content of the meeting.'])
                 logging.info(f'Uploading {cleaned_path} to channel {self.upload_channel_id}...')
                 send_file = discord.File(f, filename=f.name, spoiler=False)
                 await channel.send("😸  ✉️   Meeting adjourned! Here's the log!", file=send_file)
+                await channel.send(response.text)
             logging.info('File upload completed.')
 
 
