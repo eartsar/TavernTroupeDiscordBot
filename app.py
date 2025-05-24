@@ -4,7 +4,6 @@ import logging
 import asyncio
 import subprocess
 import socket
-
 import yaml
 import discord
 import requests
@@ -20,6 +19,8 @@ from idea import IdeaManager
 
 from util import ValueRetainingRegexMatcher
 
+from google import genai
+from google.genai import types
 
 # Parse the command line arguments
 parser = argparse.ArgumentParser(description='Run the TroupeTweets bot.')
@@ -83,6 +84,7 @@ MUSIC_VOICE_CHANNEL_ID = config['music_voice_channel'] if MUSIC_ENABLED else Non
 GITHUB_TOKEN = config['github_token'] if IDEA_ENABLED else None
 MAINTAINER_ID = config['maintainer_id'] if IDEA_ENABLED else None
 
+GEMINI_KEY = config['gemini_key']
 
 SIGNATURE_EMOJI = '<:wafflebot:780940516140515359>'
 
@@ -140,6 +142,7 @@ MUSIC_REGEX = re.compile(r'!music (play|stop|queue|skip|peek|list)(?: (.+youtube
 PETPIC_REGEX = re.compile(r'!petpic (add|create|delete|list|random|remove|upload|wipe|share)(?: ([^\s\\]+))?(?: (.+))?')
 VERSION_REGEX = re.compile(r'!version(?: (.+))?')
 IDEA_REGEX = re.compile(r'!idea (.+)')
+SUMMARIZE_REGEX = re.compile(r'!summarize')
 
 class TroupeTweetBot(discord.Client):
     def __init__(self, **kwargs):
@@ -273,6 +276,14 @@ class TroupeTweetBot(discord.Client):
             await self.idea.submit(message, m.group(1))
         elif m.match(HELP_REGEX):
             await message.channel.send(f"😽  Here's what I know how to do (so far)!\n```{HELP_TEXT}```")
+        elif m.match(SUMMARIZE_REGEX):
+            if message.reference:
+                attachment = message.reference.attachments[0]
+                gemini_payload = await attachment.read()
+                client = genai.Client(api_key=GEMINI_KEY)
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash-preview-05-20",
+                    contents=[gemini_payload, 'This is a log for a Tavern Troupe meeting. Summarize what happened.'])
 
 
 
