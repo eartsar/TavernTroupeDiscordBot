@@ -85,7 +85,7 @@ MUSIC_VOICE_CHANNEL_ID = config['music_voice_channel'] if MUSIC_ENABLED else Non
 GITHUB_TOKEN = config['github_token'] if IDEA_ENABLED else None
 MAINTAINER_ID = config['maintainer_id'] if IDEA_ENABLED else None
 
-GEMINI_KEY = config['gemini_key']
+GEMINI_KEY = config['gemini_api_key']
 
 SIGNATURE_EMOJI = '<:wafflebot:780940516140515359>'
 
@@ -144,6 +144,8 @@ PETPIC_REGEX = re.compile(r'!petpic (add|create|delete|list|random|remove|upload
 VERSION_REGEX = re.compile(r'!version(?: (.+))?')
 IDEA_REGEX = re.compile(r'!idea (.+)')
 SUMMARIZE_REGEX = re.compile(r'!summarize')
+THOUGHTS_REGEX = re.compile(r'!thoughts')
+
 
 class TroupeTweetBot(discord.Client):
     def __init__(self, **kwargs):
@@ -290,6 +292,63 @@ class TroupeTweetBot(discord.Client):
             await self.idea.submit(message, m.group(1))
         elif m.match(HELP_REGEX):
             await message.channel.send(f"😽  Here's what I know how to do (so far)!\n```{HELP_TEXT}```")
+        elif m.match(THOUGHTS_REGEX):
+            # Let the user know the bot is working on a response.
+            async with message.channel.typing():
+                try:
+                    # Fetch the last 10 messages for context (limit=11 to include the command message).
+                    history = [msg async for msg in message.channel.history(limit=11)]
+                    
+                    # The first message is the '!thoughts' command itself, so we remove it.
+                    history.pop(0)
+                    # The history is fetched newest-to-oldest, so we reverse it for chronological order.
+                    history.reverse()
+
+                    # Configure the generative AI model. We use a model that supports multimodal (text and image) input.
+                    client = genai.Client(api_key=GEMINI_KEY)
+
+                    # This is the prompt that defines the bot's persona and instructions, as requested.
+                    prompt = (
+                        "You are a discord bot present in the Tavern Troupe Performing Order discord. "
+                        "The following content are the last bunch of messages for context. "
+                        "Your persona is one that ought to have just a hint of cat in it. (The bot is named after its author's cat). If the most recent "
+                        "message in the history is a question, answer the question given."
+                    )
+
+                    import io
+                    import PIL.Image
+                    
+                    # We build the full payload for the API, including the prompt, message history, and any images.
+                    contents = [prompt]
+                    for msg in history:
+                        # Add the message's text content, prefixed with the author's display name.
+                        contents.append(f"**{msg.author.display_name}**: {msg.content}")
+
+                        # If the message has attachments, process them.
+                        if msg.attachments:
+                            for attachment in msg.attachments:
+                                # Check if the attachment is an image.
+                                if attachment.content_type and attachment.content_type.startswith('image/'):
+                                    try:
+                                        image_bytes = await attachment.read()
+                                        # Use Pillow to open the image from raw bytes
+                                        image = PIL.Image.open(io.BytesIO(image_bytes))
+                                        contents.append(image)
+                                    except PIL.UnidentifiedImageError:
+                                        # Ignore files that Pillow can't identify as images
+                                        logging.warning("Could not identify image from attachment.")
+                                    except Exception as e:
+                                        logging.error(f"Error processing image attachment: {e}")
+                                        
+                    # Call the Gemini API asynchronously to generate a response.
+                    response = client.models.generate_content(model="gemini-2.5-flash-preview-05-20", contents=contents)
+                    
+                    # Send the generated text back to the Discord channel.
+                    await message.channel.send(response.text)
+
+                except Exception as e:
+                    logging.error(f"Error in !thoughts command: {e}")
+                    await message.channel.send("😿 My brain just short-circuited... try again in a bit.")
 
 
 
