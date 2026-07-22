@@ -1,4 +1,3 @@
-import sys
 import asyncio
 import logging
 import shutil
@@ -7,16 +6,12 @@ import random
 import glob
 import zipfile
 import tempfile
-import time
 import hashlib
-import pathlib
 import imghdr
 import dataclasses
-import subprocess
-import math
 
 import discord
-import aiofiles
+from discord import ui
 import gdown
 import requests
 
@@ -66,11 +61,58 @@ seeing this - it's because I'm a new, shinier version of myself!
 
 If you think this disclaimer missed anything that should be made clear, or
 if you have any questions or comments about what I do with your data, please
-do not hesitate to reach out to Discord user eartsar#3210 - my creator.```'''
+do not hesitate to reach out to Fenlyn - my creator.```'''
+
+
+DISCLAIMER_TEXT = """Hi trouper. I'm not a lawyer or anything, but I need to be *really clear* about a few things before you do this.
+
+1 - You are uploading a file to a personal server. Don't do this unless you're comfortable with that.
+
+2 - While I SHOULD have working functionality to remove photos, I can't PROMISE the capability in perpetuity.
+
+3 - You're giving consent for other people in this Discord server - or any other Discord server I might be installed on - to potentially view these photos.
+
+4 - I will do my best to be respectful with your data.
+
+5 - You will NOT give me anything even REMOTELY inappropriate. Failure to adhere to this can result in me being turned off, or worse.
+
+By clicking Accept below, you understand the risks you're taking in using this feature.
+
+If you have any questions, please reach out to Discord user Fenlyn - my creator."""
 
 ACCEPTABLE_FILETYPES = ('jpg', 'jpeg', 'gif', 'png', 'tiff')
 
 MAX_PHOTO_SIZE = 25165824
+
+
+class DisclaimerView(ui.View):
+    """View with disclaimer message and accept/decline buttons"""
+
+    def __init__(self, photos_manager):
+        super().__init__(timeout=300)  # 5 minute timeout
+        self.photos_manager = photos_manager
+        self.value = None
+
+    @ui.button(label="Accept", style=discord.ButtonStyle.green)
+    async def accept_button(self, interaction: discord.Interaction, button: ui.Button):
+        self.photos_manager.accepted_cache.add(interaction.user.id)
+        self.value = True
+        self.stop()
+        # Edit the disclaimer in place so it doesn't linger with live buttons.
+        await interaction.response.edit_message(
+            content="✅ You've accepted the disclaimer! You can now use petpic features.\n"
+                    "💡 Tip: just re-run your command to continue.",
+            view=None
+        )
+
+    @ui.button(label="Decline", style=discord.ButtonStyle.red)
+    async def decline_button(self, interaction: discord.Interaction, button: ui.Button):
+        self.value = False
+        self.stop()
+        await interaction.response.edit_message(
+            content="❌ You must accept the disclaimer to use petpic features.",
+            view=None
+        )
 
 
 def requires_disclaimer(fn):
@@ -110,17 +152,36 @@ class PhotosManager():
         self.bot = bot
         self.db = db
         self.photos_root_path = photos_root_path
-        
+
         # set of user_ids who accepted the disclaimer
         self.accepted_cache = set()
-        
+
         # dict from message --> user_id
         # the key is the message of the command that triggered the disclaimer
         self.pending_cache = {}
-        
+
         # dict of user_id --> string
         # the last command entered that caused the disclaimer to pop up
         self.sent_command_cache = {}
+
+
+    async def check_disclaimer_interaction(self, interaction: discord.Interaction):
+        """
+        Check if user has accepted disclaimer for slash commands.
+        If not, show disclaimer with accept/decline buttons and return False.
+        If accepted, return True.
+        """
+        if interaction.user.id in self.accepted_cache:
+            return True
+
+        # Show disclaimer with buttons
+        view = DisclaimerView(self)
+        await interaction.response.send_message(
+            f"ℹ️ **PETPIC FEATURE DISCLAIMER** ℹ️\n\n{DISCLAIMER_TEXT}",
+            view=view,
+            ephemeral=True
+        )
+        return False
 
 
     async def initialize(self):
@@ -194,8 +255,8 @@ class PhotosManager():
             await self.db.create_album(album_name, message.author.id)
         except IntegrityError:
             logging.warning(f'{message.author.id} attempted to create album {album_name} which already exists.')
-            return await message.channel.send(f'{message.author.mention} - There is already an album named `{album_name}`.')
-        return await message.channel.send(f'{message.author.mention} - Created album `{album_name}`.')
+            return await message.reply(f'{message.author.mention} - There is already an album named `{album_name}`.')
+        return await message.reply(f'{message.author.mention} - Created album `{album_name}`.')
 
 
     async def delete_album(self, message, album_name):
@@ -203,10 +264,10 @@ class PhotosManager():
         Delete an album on disk and all its contents
         '''
         if not await self.db.user_owns_album(album_name, message.author.id):
-            return await message.channel.send(f"{message.author.mention} - You don't have an album named `{album_name}`.")
-        
+            return await message.reply(f"{message.author.mention} - You don't have an album named `{album_name}`.")
+
         await self.db.delete_album(album_name)
-        return await message.channel.send(f'{message.author.mention} - Deleted album `{album_name}`.')
+        return await message.reply(f'{message.author.mention} - Deleted album `{album_name}`.')
 
 
     async def wipe(self, message):
@@ -238,7 +299,7 @@ class PhotosManager():
         num_photos_removed = await self.db.wipe_user_photos(message.author.id)
         logging.info(f'  {num_photos_removed} photos removed from DB.')
 
-        return await message.channel.send(f'{message.author.mention} - All your uploaded photos and albums have been deleted.')
+        return await message.reply(f'{message.author.mention} - All your uploaded photos and albums have been deleted.')
 
 
     @requires_disclaimer
@@ -247,12 +308,12 @@ class PhotosManager():
         Share an album so that it can be used by everyone
         '''
         if not await self.db.album_exists(album_name):
-            return await message.channel.send(f"{message.author.mention} - There is no album named `{album_name}`.")
+            return await message.reply(f"{message.author.mention} - There is no album named `{album_name}`.")
         if not await self.db.user_owns_album(album_name, message.author.id):
-            return await message.channel.send(f"{message.author.mention} - You don't own the album `{album_name}`.")
+            return await message.reply(f"{message.author.mention} - You don't own the album `{album_name}`.")
 
-        await self.db.make_album_public(album_name) 
-        return await message.channel.send(f'{message.author.mention} - Album {album_name} is now open to everyone.')
+        await self.db.make_album_public(album_name)
+        return await message.reply(f'{message.author.mention} - Album {album_name} is now open to everyone.')
 
 
     async def list_albums(self, message, all_albums=False):
@@ -262,20 +323,20 @@ class PhotosManager():
         albums = await self.db.get_albums(creator=(message.author.id if not all_albums else None))
         if not albums:
             if all_albums:
-                return await message.channel.send(f"{message.author.mention} - there aren't any albums! Make the first one!")
+                return await message.reply(f"{message.author.mention} - there aren't any albums! Make the first one!")
             else:
-                return await message.channel.send(f"{message.author.mention} - you don't have any albums!")
-        
+                return await message.reply(f"{message.author.mention} - you don't have any albums!")
+
         albums = sorted(albums, key=lambda x: x.album_name)
-        
+
         lines = []
         for album in albums:
             marker = "* " if album.creator == 'public' else "  "
             count = len(await self.db.get_photos(album_name=album.album_name))
             lines.append(f'{marker}{album.album_name} - {count} photos.')
-        
+
         album_listing = '\n'.join(lines) + '\n\n* this is a public album'
-        return await message.channel.send(f'{message.author.mention} - I found the following albums:```\n{album_listing}```')
+        return await message.reply(f'{message.author.mention} - I found the following albums:```\n{album_listing}```')
 
 
     async def fetch(self, message, album_name):
@@ -283,11 +344,11 @@ class PhotosManager():
         Fetches a random photo and posts it
         '''
         if album_name and not await self.db.album_exists(album_name):
-            return await message.channel.send(f'{message.author.mention} - There is no album named `{album_name}`.')
-        
+            return await message.reply(f'{message.author.mention} - There is no album named `{album_name}`.')
+
         all_photos = await self.db.get_photos(album_name=album_name)
         if not all_photos:
-            return await message.channel.send(f"I couldn't find any photos!")
+            return await message.reply(f"I couldn't find any photos!")
 
         # Calculate weights. This heuristic adds one to the freq of all photos (to avoid zero), creates an inverse weight, and
         # then normalizes the weights for all photos.
@@ -298,27 +359,12 @@ class PhotosManager():
         total_weight = sum(weights)
         weights = [_/total_weight for _ in weights]
 
-        # Bin the weights for display, and decimal shift them to make spark happy
-        spark_weights = sorted([_ * 100000 for _ in weights])
-        chunk = 100
-        if len(spark_weights) > chunk:
-            factor = math.ceil(len(spark_weights) / chunk)
-            # spark_weights = spark_weights[:factor*chunk]
-            bins = []
-            for i in range(0, len(spark_weights), factor):
-                bins.append(sum(spark_weights[i:i+factor])/factor)
-            spark_weights = bins
-        # stringify for subprocess
-        spark_weights = [str(_) for _ in reversed(spark_weights)]
-        cmd = 'spark ' + ' '.join(spark_weights)
-        logging.info('petpic bias: ' + subprocess.check_output(cmd, shell=True).decode('utf-8'))
-
         random_photo = random.choices(all_photos, weights=weights)[0]
         random_photo_path = os.path.join(self.photos_root_path, random_photo.photo_name)
         with open(random_photo_path, 'rb') as f:
             ext = imghdr.what(random_photo_path)
             send_file = discord.File(f, filename=f.name + '.' + ext, spoiler=False)
-            await message.channel.send(f"Here's a random photo from the album `{random_photo.album_name}`!", file=send_file)
+            await message.reply(f"Here's a random photo from the album `{random_photo.album_name}`!", file=send_file)
         
         return await self.db.increment_photo_freq(random_photo)
 
@@ -332,14 +378,14 @@ class PhotosManager():
         If a URL is supplied instead, it downloads that instead.
         '''
         if not album_name:
-            return await message.channel.send(f'{message.author.mention} - You need to tell me which album to add to.')
+            return await message.reply(f'{message.author.mention} - You need to tell me which album to add to.')
 
         if not await self.db.album_exists(album_name):
-            return await message.channel.send(f'{message.author.mention} - There is no album named `{album_name}`.')
+            return await message.reply(f'{message.author.mention} - There is no album named `{album_name}`.')
         elif not await self.db.user_owns_album(album_name, message.author.id) and not await self.db.is_album_public(album_name):
-            return await message.channel.send(f"{message.author.mention} - You don't have access to the album `{album_name}`.")
+            return await message.reply(f"{message.author.mention} - You don't have access to the album `{album_name}`.")
         elif not message.attachments and not url:
-            return await message.channel.send(f'{message.author.mention} - You need to attach either a photo or supply a url to download from')
+            return await message.reply(f'{message.author.mention} - You need to attach either a photo or supply a url to download from')
 
         # If the file is an attachment, validate it, and move it to the right spot
         if message.attachments:
@@ -347,7 +393,7 @@ class PhotosManager():
 
             if attachment.size > MAX_PHOTO_SIZE:
                 logging.warning(f'User {message.author.id} uploaded file via attachment - REJECTED: File exceeds maximum allowed size')
-                return await message.channel.send(f'{message.author.mention} - Image files must be less than 24 Megabytes')
+                return await message.reply(f'{message.author.mention} - Image files must be less than 24 Megabytes')
 
             # Uploaded file meets all requirements
             try:
@@ -358,21 +404,21 @@ class PhotosManager():
 
                     if imghdr.what(temp_photo_path) not in ACCEPTABLE_FILETYPES:
                         logging.warning(f'User {message.author.id} uploaded file via attachment - REJECTED: Bad file type')
-                        return await message.channel.send(f'{message.author.mention} - The attached file is not a valid photo or archive.')
+                        return await message.reply(f'{message.author.mention} - The attached file is not a valid photo or archive.')
 
                     await self._place_photo(temp_photo_path, message.author.id, album_name)
             except Exception:
                 logging.exception(f'Exception thrown while saving file for {message.author.id} to album {album_name}')
-                return await message.channel.send(f'{message.author.mention} - Something went wrong when downloading the file.')
-        
+                return await message.reply(f'{message.author.mention} - Something went wrong when downloading the file.')
+
         # If the URL was supplied, branch into custom logic to download the archive, and handle accordingly
         elif url:
             try:
                 num_added = await asyncio.get_event_loop().run_in_executor(None, self.download_and_extract, url, message.author.id, album_name)
-                await message.channel.send(f'{message.author.mention} - {str(num_added)} files were added to album `{album_name}`.')        
+                await message.reply(f'{message.author.mention} - {str(num_added)} files were added to album `{album_name}`.')
             except Exception:
                 logging.exception(f'Exception thrown while downloading from url ({url}) supplied by {message.author.id}')
-                return await message.channel.send(f"{message.author.mention} - Something went wrong with fetching the zip. \
+                return await message.reply(f"{message.author.mention} - Something went wrong with fetching the zip. \
 Many cloud services have a landing page on publicly accessible files that I can't deal with yet. Right now I know how to download \
 from **Google Drive** and **Dropbox**, but I'll try any link you give me!")
 

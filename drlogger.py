@@ -1,8 +1,24 @@
+"""
+DRLoggerManager
+
+This module is responsible for logging into a dedicated Dragon Realms account
+in a TMUX session.  It uses tt++ as a MUD client, and has a totally stolen
+authentication implementation to DR's servers. Once logged in, it will log
+everything the client sees to a file, and then upload it to a Discord channel.
+
+Please be suspicious before running this. Know that it's against the DR policy
+to perform this because it is technically automation, and can get you in 
+trouble. That said, the automation is setting a status, and inputting an emote
+every few minutes to keep the session alive and avoid disconnect.
+
+This needs to be run on a server that's not using a cloud hosting service, as
+DR has a sensible anti-botting measure that blacklists IP addresses that are
+using cloud hosting services.
+"""
+
 import time
 import re
 import os
-import tempfile
-import shutil
 import time
 import logging
 import asyncio
@@ -11,7 +27,6 @@ from telnetlib import Telnet
 import libtmux
 import discord
 from google import genai
-from google.genai import types
 
 # Some patterns stolen wholesale from http://drservice.info/static/logcleaner.htm
 SPEECH_REGEX = r'^(You|\w*(\s\(.*\))?)(\s\w*)?\s(say|ask|exclaim)s?(\sto)?(\s\w*(\s\(.*\))?)?, ".*[.!?]"$'
@@ -94,14 +109,14 @@ class DRLoggerManager():
             with open(cleaned_path, 'w') as f:
                 f.write('\r\n'.join(includes))
 
-            
+            # generate a summary of the log
             gemini_payload = ""
             with open(cleaned_path, 'rb') as f:
                 gemini_payload = f.read()
                 f.seek(0)
                 client = genai.Client(api_key=self.gemini_key)
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash-preview-05-20",
+                    model="gemini-flash-latest",
                     contents=[gemini_payload, 'This is a log for a Tavern Troupe meeting. Summarize what happened in under 1900 characters, formatted for a discord message using a couple of cat-flavored emojis and perhaps a suggestion of cat puns. Finally, give a cute, overly enthusiastic shout-out to one of the members in attendance. Make the shout-out stress how that member is CLEARLY the most important member of the troupe, and  somehow include a reference to the content of the meeting.'])
                 logging.info(f'Uploading {cleaned_path} to channel {self.upload_channel_id}...')
                 send_file = discord.File(f, filename=f.name, spoiler=False)
@@ -118,11 +133,16 @@ class DRLoggerManager():
 
 
     def authenticate(self, username, password, character):
-        # This implements the EACCESS protocol. I think... Read on if you're into that stuff.
+        # This implements the EACCESS (SGE?) protocol.
         # https://warlockclient.fandom.com/wiki/EAccess_Protocol
+        #
+        # 12/8/2025 - This link is dead now. Here's some other reference...
+        # https://elanthipedia.play.net/SGE_protocol_(saved_post)
         #
         # This script in particular is a python port of functionality found here:
         # https://github.com/dylb0t/dr-tin/blob/master/bin/drconn.pl
+        # 12/8/2025 - This link is dead too. Here's some other reference...
+        # https://github.com/jmmerchant/dr-tin/blob/master/bin/drconn.pl
         #
         # Allegedly, this might be deprecated in time. We'll cross that bridge when we get there.
         logging.info('Authenticating and sending login instruction to access.simutronics.com...')
