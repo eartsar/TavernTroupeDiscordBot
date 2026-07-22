@@ -25,11 +25,10 @@ class TweetManager():
         for account in self.relay_map.keys():
             logging.info(f"\tWatching @{account}...")
             self.tasks.append(asyncio.create_task(self.poll_tweets(account)))
-
-        for destination_channel_id in self.relay_map[account]:
-            channel = discord.utils.get(self.bot.get_all_channels(), id=int(destination_channel_id))
-            if not channel:
-                logging.warning(f"Bot does not have access to channel with ID {destination_channel_id}!")
+            for destination_channel_id in self.relay_map[account]:
+                channel = discord.utils.get(self.bot.get_all_channels(), id=int(destination_channel_id))
+                if not channel:
+                    logging.warning(f"Bot does not have access to channel with ID {destination_channel_id}!")
         logging.info("Done.")
 
 

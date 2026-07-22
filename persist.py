@@ -14,26 +14,94 @@ class DatabaseManager():
             await db.execute('CREATE TABLE IF NOT EXISTS CACHED_TWEETS (tweet_id varchar(255), channel_id varchar(255), UNIQUE(tweet_id, channel_id))')
             await db.execute('CREATE TABLE IF NOT EXISTS ALBUMS (album_name varchar(255), creator varchar(255), UNIQUE(album_name))')
             await db.execute('CREATE TABLE IF NOT EXISTS PHOTOS (photo_name varchar(255), album_name varchar(255), uploader varchar(255), freq int DEFAULT 0, UNIQUE(photo_name, album_name))')
+            await db.execute('''CREATE TABLE IF NOT EXISTS EVENT_LINKS (
+                calendar_id TEXT NOT NULL,
+                google_id TEXT NOT NULL,
+                discord_id INTEGER NOT NULL,
+                signature TEXT NOT NULL,
+                PRIMARY KEY (calendar_id, google_id)
+            )''')
+            await db.execute('''CREATE TABLE IF NOT EXISTS EVENTS_DIGEST (
+                channel_id TEXT PRIMARY KEY,
+                message_id TEXT NOT NULL,
+                posted_at TEXT NOT NULL,
+                signature TEXT NOT NULL
+            )''')
             logging.info("Done.")
+
+
+    async def get_digest_state(self, channel_id):
+        async with aiosqlite.connect(self.dbpath) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT message_id, posted_at, signature FROM EVENTS_DIGEST WHERE channel_id = ?",
+                (str(channel_id),),
+            ) as cursor:
+                return await cursor.fetchone()
+
+
+    async def upsert_digest_state(self, channel_id, message_id, posted_at, signature):
+        async with aiosqlite.connect(self.dbpath) as db:
+            await db.execute(
+                """INSERT INTO EVENTS_DIGEST (channel_id, message_id, posted_at, signature)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(channel_id)
+                   DO UPDATE SET message_id = excluded.message_id,
+                                 posted_at  = excluded.posted_at,
+                                 signature  = excluded.signature""",
+                (str(channel_id), str(message_id), posted_at, signature),
+            )
+            await db.commit()
+
+
+    async def get_event_links(self, calendar_id):
+        async with aiosqlite.connect(self.dbpath) as db:
+            async with db.execute(
+                "SELECT google_id, discord_id, signature FROM EVENT_LINKS WHERE calendar_id = ?",
+                (calendar_id,),
+            ) as cursor:
+                return await cursor.fetchall()
+
+
+    async def upsert_event_link(self, calendar_id, google_id, discord_id, signature):
+        async with aiosqlite.connect(self.dbpath) as db:
+            await db.execute(
+                """INSERT INTO EVENT_LINKS (calendar_id, google_id, discord_id, signature)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(calendar_id, google_id)
+                   DO UPDATE SET discord_id = excluded.discord_id,
+                                 signature  = excluded.signature""",
+                (calendar_id, google_id, discord_id, signature),
+            )
+            await db.commit()
+
+
+    async def delete_event_link(self, calendar_id, google_id):
+        async with aiosqlite.connect(self.dbpath) as db:
+            await db.execute(
+                "DELETE FROM EVENT_LINKS WHERE calendar_id = ? AND google_id = ?",
+                (calendar_id, google_id),
+            )
+            await db.commit()
 
 
     async def add_tweet(self, tweet_id, channel_id):
         async with aiosqlite.connect(self.dbpath) as db:
-            await db.execute(f"INSERT OR IGNORE INTO CACHED_TWEETS (tweet_id, channel_id) VALUES ('{tweet_id}', '{channel_id}')")
+            await db.execute("INSERT OR IGNORE INTO CACHED_TWEETS (tweet_id, channel_id) VALUES (?, ?)", (tweet_id, channel_id))
             await db.commit()
         return True
 
 
     async def already_seen(self, tweet_id, channel_id):
         async with aiosqlite.connect(self.dbpath) as db:
-            async with db.execute(f"SELECT * FROM CACHED_TWEETS WHERE tweet_id = '{tweet_id}' AND channel_id = '{channel_id}'") as cursor:
+            async with db.execute("SELECT * FROM CACHED_TWEETS WHERE tweet_id = ? AND channel_id = ?", (tweet_id, channel_id)) as cursor:
                 return await cursor.fetchone() != None
         return False
 
 
     async def create_album(self, album_name, creator):
         async with aiosqlite.connect(self.dbpath) as db:
-            async with db.execute(f"INSERT INTO ALBUMS (album_name, creator) VALUES ('{album_name}', '{creator}')") as cursor:
+            async with db.execute("INSERT INTO ALBUMS (album_name, creator) VALUES (?, ?)", (album_name, creator)) as cursor:
                 await db.commit()
                 return cursor.rowcount == 1
 
@@ -41,17 +109,17 @@ class DatabaseManager():
     async def delete_album(self, album_name):
         async with aiosqlite.connect(self.dbpath) as db:
             album_success = False
-            photos_success = False
 
             async with db.execute("DELETE FROM ALBUMS WHERE album_name = ?", (album_name,)) as cursor:
                 await db.commit()
                 album_success = cursor.rowcount == 1
 
-            async with db.execute("DELETE FROM PHOTOS WHERE album_name = ?", (album_name,)) as cursor:
+            # An album may legitimately contain zero photos, so the photo delete
+            # is best-effort cleanup and must not gate the album delete's success.
+            async with db.execute("DELETE FROM PHOTOS WHERE album_name = ?", (album_name,)):
                 await db.commit()
-                photos_success = cursor.rowcount > 0
 
-            return album_success and photos_success
+            return album_success
 
 
 
